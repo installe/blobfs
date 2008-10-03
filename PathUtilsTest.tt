@@ -1,0 +1,27 @@
+#include <cxxtest/TestSuite.h>
+
+#include "PathUtils.hh"
+
+#include <string>
+
+using namespace std;
+
+class PathUtilsTest : public CxxTest::TestSuite {
+
+private:
+    PathUtils utils;
+
+public:
+    void testBaseName() {
+	TS_ASSERT_EQUALS("bar", utils.baseName("/foo/bar"));
+	TS_ASSERT_EQUALS("foo", utils.baseName("/foo"));
+	TS_ASSERT_EQUALS("", utils.baseName("/"));
+    }
+
+    void testDirName() {
+	TS_ASSERT_EQUALS("/foo/bar", utils.dirName("/foo/bar/test"));
+	TS_ASSERT_EQUALS("/foo", utils.dirName("/foo/bar"));
+	TS_ASSERT_EQUALS("/", utils.dirName("/foo"));
+    }
+
+};

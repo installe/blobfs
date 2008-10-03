@@ -1,0 +1,28 @@
+#include "PathIterator.hh"
+
+#include <cxxtest/TestSuite.h>
+
+class PathIteratorTestSuite : public CxxTest::TestSuite {
+
+public:
+    void testIterateThroughPath() {
+	PathIterator it = PathIterator("/this/is/a/test");
+
+	TS_ASSERT(it.hasNext());
+	TS_ASSERT_EQUALS("this", it.next());
+	TS_ASSERT(it.hasNext());
+	TS_ASSERT_EQUALS("is", it.next());
+	TS_ASSERT(it.hasNext());
+	TS_ASSERT_EQUALS("a", it.next());
+	TS_ASSERT(it.hasNext());
+	TS_ASSERT_EQUALS("test", it.next());
+	TS_ASSERT(! it.hasNext());
+    }
+
+    void testIterateThroughRootDir() {
+	PathIterator it = PathIterator("/");
+
+	TS_ASSERT(! it.hasNext());
+    }
+
+};

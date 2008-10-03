@@ -1,0 +1,16 @@
+#include "IoError.hh"
+
+#include <string.h>
+
+#include <cxxtest/TestSuite.h>
+
+class IoErrorTestSuite : public CxxTest::TestSuite {
+
+public:
+    void testConstructor() {
+	IoError error(1, "MontyPythonsFlyingCircus %i", 42);
+
+	TS_ASSERT(strcmp("MontyPythonsFlyingCircus 42: Operation not permitted", error.what()) == 0);
+    }
+
+};
