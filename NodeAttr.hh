@@ -8,7 +8,10 @@
 class NodeAttr {
 
 public:
-    virtual void getAttr(struct stat &stbuf) const
+    virtual void getAttr(struct stat& stbuf) const
+	throw() = 0;
+
+    virtual void setAttr(const struct stat& stbuf)
 	throw() = 0;
 
     virtual void setSize(off_t size)

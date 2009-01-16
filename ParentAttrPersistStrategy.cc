@@ -1,7 +1,12 @@
+#include "file.hh"
+#include "Parent.hh"
 #include "ParentAttrPersistStrategy.hh"
 
 void ParentAttrPersistStrategy::persist(Node& node)
     throw()
 {
-    // TODO
+    Parent& parent = dynamic_cast<Parent&>(node);
+
+    parent.setDirty();
+    parent.release();
 }

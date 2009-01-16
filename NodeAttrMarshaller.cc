@@ -7,13 +7,37 @@ NodeAttrMarshaller::NodeAttrMarshaller(FsMarshaller& marshaller)
     throw()
     : marshaller(marshaller) { }
 
-void NodeAttrMarshaller::marshallFile(const NodeAttr& attr, FileHandle fHandle)
+void NodeAttrMarshaller::marshallNode(const NodeAttr& attr, const FileHandle fHandle)
     const
     throw(IoError)
 {
-    marshaller.setFileLongAttr(fHandle, "uid", attr.getUid());
-    marshaller.setFileLongAttr(fHandle, "gid", attr.getGid());
-    marshaller.setFileLongAttr(fHandle, "mode", attr.getMode());
+    marshaller.setLongAttr(fHandle, "uid", attr.getUid());
+    marshaller.setLongAttr(fHandle, "gid", attr.getGid());
+    marshaller.setLongAttr(fHandle, "mode", attr.getMode());
+
+    marshaller.setLongAttr(fHandle, "ctime", attr.getCTime());
+    marshaller.setLongAttr(fHandle, "mtime", attr.getMTime());
+    marshaller.setLongAttr(fHandle, "atime", attr.getATime());
+}
+
+void NodeAttrMarshaller::unmarshallNode(NodeAttr& attr, const FileHandle fHandle)
+    const
+    throw(IoError)
+{
+    attr.setUid(marshaller.getLongAttr(fHandle, "uid"));
+    attr.setGid(marshaller.getLongAttr(fHandle, "gid"));
+    attr.setMode(marshaller.getLongAttr(fHandle, "mode"));
+
+    attr.setCTime(marshaller.getLongAttr(fHandle, "ctime"));
+    attr.setMTime(marshaller.getLongAttr(fHandle, "mtime"));
+    attr.setATime(marshaller.getLongAttr(fHandle, "atime"));
+}
+
+void NodeAttrMarshaller::marshallFile(const NodeAttr& attr, const FileHandle fHandle)
+    const
+    throw(IoError)
+{
+    marshallNode(attr, fHandle);
 }
 
 void NodeAttrMarshaller::unmarshallFile(NodeAttr& attr, FileHandle fHandle)
@@ -25,7 +49,19 @@ void NodeAttrMarshaller::unmarshallFile(NodeAttr& attr, FileHandle fHandle)
     cat.debug("got size: %zu", size);
 
     attr.setSize(size);
-    attr.setUid(marshaller.getFileLongAttr(fHandle, "uid"));
-    attr.setGid(marshaller.getFileLongAttr(fHandle, "gid"));
-    attr.setMode(marshaller.getFileLongAttr(fHandle, "mode"));
+    unmarshallNode(attr, fHandle);
+}
+
+void NodeAttrMarshaller::marshallDir(const NodeAttr& attr, const FileHandle fHandle)
+    const
+    throw(IoError)
+{
+    marshallNode(attr, fHandle);
+}
+
+void NodeAttrMarshaller::unmarshallDir(NodeAttr& attr, const FileHandle fHandle)
+    const
+    throw(IoError)
+{
+    unmarshallNode(attr, fHandle);
 }

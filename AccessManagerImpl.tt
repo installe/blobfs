@@ -1,0 +1,199 @@
+#include <cxxtest/TestSuite.h>
+
+#include "AccessManagerImpl.hh"
+#include "ChildAttrPersistStrategy.hh"
+#include "NodeAttrImpl.hh"
+#include "UserContext.hh"
+
+#include <sys/stat.h>
+
+struct fuse_context context;
+
+struct fuse_context *fuse_get_context() {
+    return &context;
+}
+
+class NodeMock : public Node {
+
+private:
+    ChildAttrPersistStrategy strategy;
+    NodeAttrImpl attr;
+    Node *owner;
+
+public:
+    NodeMock(Node *owner = NULL)
+	throw()
+	: strategy(), attr(*this, strategy, S_IFREG), owner(owner) { }
+
+    NodeAttr& getAttr()
+	throw()
+    {
+	return attr;
+    }
+
+    const NodeAttr& getAttr() const
+	throw()
+    {
+	return attr;
+    }
+
+    const Node& getOwner() const
+	throw()
+    {
+	return *owner;
+    }
+
+};
+
+class AccessManagerImplTest : public CxxTest::TestSuite {
+
+private:
+    struct AccessChecker {
+	virtual void operator()(AccessManager& accessManager, Node& node) = 0;
+    };
+
+    AccessManagerImpl accessManager;
+    NodeMock *node;
+    NodeMock *owner;
+
+    void setUp() {
+	owner = new NodeMock();
+	node = new NodeMock(owner);
+    }
+
+    void tearDown() {
+	delete node;
+	delete owner;
+    }
+
+    void setPerm(Node *n, mode_t mode, uid_t uid, gid_t gid) {
+	NodeAttr& attr = n->getAttr();
+
+	attr.setMode(mode);
+	attr.setUid(uid);
+	attr.setGid(gid);
+    }
+
+    void verify(mode_t fMode, uid_t fUid, gid_t fGid, uid_t cUid, gid_t cGid,
+		AccessChecker& accessChecker) {
+	setPerm(node, fMode, fUid, fGid);
+
+	context.uid = cUid;
+	context.gid = cGid;
+
+	accessChecker(accessManager, *node);
+    }
+
+    void verify(mode_t fMode, uid_t fUid, gid_t fGid,
+		mode_t oMode, uid_t oUid, gid_t oGid,
+		uid_t cUid, gid_t cGid, AccessChecker& accessChecker) {
+	setPerm(node, fMode, fUid, fGid);
+	setPerm(owner, oMode, oUid, oGid);
+	
+	context.uid = cUid;
+	context.gid = cGid;
+
+	accessChecker(accessManager, *node);
+    }
+
+public:
+    void testReadable() {
+	struct ReadAccessChecker : AccessChecker {
+	    void operator()(AccessManager& accessManager, Node& node) {
+		TS_ASSERT_THROWS_NOTHING(accessManager.checkReadable(
+					     node, "foo", UserContext()));
+	    }
+	} checker1;
+
+	verify(S_IRUSR|S_IRGRP, 3, 5, 8, 5, checker1);
+	verify(S_IRUSR, 3, 5, 3, 13, checker1);
+	verify(S_IROTH, 3, 5, 8, 13, checker1);
+
+	struct NoReadAccessChecker : AccessChecker {
+	    void operator()(AccessManager& accessManager, Node& node) {
+		TS_ASSERT_THROWS(accessManager.checkReadable(
+				     node, "foo", UserContext()), IoError);
+	    }
+	} checker2;
+
+	verify(0, 3, 5, 3, 5, checker2);
+	verify(S_IRUSR, 3, 5, 8, 13, checker2);
+	verify(S_IRGRP, 3, 5, 3, 8, checker2);
+    }
+
+    void testWritable() {
+	struct WriteAccessChecker : AccessChecker {
+	    void operator()(AccessManager& accessManager, Node& node) {
+		TS_ASSERT_THROWS_NOTHING(accessManager.checkWritable(
+					     node, "foo", UserContext()));
+	    }
+	} checker1;
+
+	verify(S_IWUSR|S_IWGRP, 3, 5, 8, 5, checker1);
+	verify(S_IWUSR, 3, 5, 3, 13, checker1);
+	verify(S_IWOTH, 3, 5, 8, 13, checker1);
+
+	struct NoWriteAccessChecker : AccessChecker {
+	    void operator()(AccessManager& accessManager, Node& node) {
+		TS_ASSERT_THROWS(accessManager.checkWritable(
+				     node, "foo", UserContext()), IoError);
+	    }
+	} checker2;
+
+	verify(0, 3, 5, 3, 5, checker2);
+	verify(S_IWUSR, 3, 5, 8, 13, checker2);
+	verify(S_IWGRP, 3, 5, 3, 8, checker2);
+    }
+
+    void testExecutable() {
+	struct ExecuteAccessChecker : AccessChecker {
+	    void operator()(AccessManager& accessManager, Node& node) {
+		TS_ASSERT_THROWS_NOTHING(accessManager.checkExecutable(
+					     node, "foo", UserContext()));
+	    }
+	} checker1;
+
+	verify(S_IXUSR|S_IXGRP, 3, 5, 8, 5, checker1);
+	verify(S_IXUSR, 3, 5, 3, 13, checker1);
+	verify(S_IXOTH, 3, 5, 8, 13, checker1);
+
+	struct NoExecuteAccessChecker : AccessChecker {
+	    void operator()(AccessManager& accessManager, Node& node) {
+		TS_ASSERT_THROWS(accessManager.checkExecutable(
+				     node, "foo", UserContext()), IoError);
+	    }
+	} checker2;
+
+	verify(0, 3, 5, 3, 5, checker2);
+	verify(S_IXUSR, 3, 5, 8, 13, checker2);
+	verify(S_IXGRP, 3, 5, 3, 8, checker2);
+    }
+
+    void testModifiable() {
+	struct ModifyAccessChecker : AccessChecker {
+	    void operator()(AccessManager& accessManager, Node& node) {
+		TS_ASSERT_THROWS_NOTHING(accessManager.checkModifiable(
+					     node, "foo", UserContext()));
+	    }
+	} checker1;
+
+	verify(0, 3, 5, S_IWOTH, 8, 13, 21, 34, checker1);
+	return;
+	verify(S_IXUSR, 3, 5, S_IWOTH, 8, 21, 3, 13, checker1);
+	verify(S_IXOTH, 3, 5, S_IWGRP, 21, 5, 8, 13, checker1);
+	verify(S_IXUSR|S_IXGRP, 3, 5, S_ISVTX, 3, 13, 8, 21, checker1);
+
+	struct NoModifyAccessChecker : AccessChecker {
+	    void operator()(AccessManager& accessManager, Node& node) {
+		TS_ASSERT_THROWS(accessManager.checkModifiable(
+				     node, "foo", UserContext()), IoError);
+	    }
+	} checker2;
+
+	verify(0, 3, 5, S_IWOTH|S_ISVTX, 8, 5, 3, 5, checker2);
+	verify(0, 3, 5, S_IWGRP|S_ISVTX, 3, 13, 3, 5, checker2);
+	verify(0, 3, 5, S_IWGRP, 3, 5, 8, 13, checker2);
+	verify(0, 3, 5, S_IWUSR, 3, 5, 8, 5, checker2);
+    }
+
+};

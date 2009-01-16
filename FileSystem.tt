@@ -1,15 +1,29 @@
 #include <cxxtest/TestSuite.h>
 
+#include "AccessManagerImpl.hh"
 #include "BlobFsMarshaller.hh"
 #include "file.hh"
 #include "FileSystem.hh"
+#include "FsMarshallerMock.hh"
+#include "RootDirMarshallerImpl.hh"
+#include "SystemClock.hh"
+
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
 
 class FileSystemTest : public CxxTest::TestSuite {
 
 private:
+    fs::path tmpDir;
     FsMarshaller *marshaller;
+    AccessManager *accessManager;
     RootDir *rootDir;
-    RootUidMarshaller *rootUidMarshaller;
+    Clock *clock;
+    RootDirMarshaller *rootDirMarshaller;
+    // TODO Remove
+//    RootUidMarshaller *rootUidMarshaller;
     FileSystem *fs;
 
     File *file1;
@@ -17,26 +31,34 @@ private:
 
 public:
     void setUp() {
-	rootUidMarshaller = new RootUidMarshaller("foo");
-	marshaller = new BlobFsMarshaller(*rootUidMarshaller, "");
-	rootDir = new RootDir(*marshaller);
-	fs = new FileSystem(*marshaller, *rootDir);
+	// TODO Remove
+	tmpDir = fs::current_path() / "test";
+	fs::create_directories(tmpDir);
+	rootDirMarshaller = new RootDirMarshallerImpl(tmpDir / "foo");
+	marshaller = new FsMarshallerMock();
+	accessManager = new AccessManagerImpl();
+	rootDir = new RootDir(*marshaller, *rootDirMarshaller);
+	clock = new SystemClock();
+	fs = new FileSystem(*marshaller, *accessManager, *rootDir, *clock);
 
 	file1 = new File(*marshaller, *rootDir, "foo");
 	file2 = new File(*marshaller, *rootDir, "bar");
 
-	rootDir->addFile(*file1);
-	rootDir->addFile(*file2);
+	rootDir->getAttr().setMode(S_IWOTH|S_IXOTH);
+	rootDir->addChild(*file1);
+	rootDir->addChild(*file2);
     }
 
     void tearDown() {
 	delete file1;
 	delete file2;
 	delete fs;
-	delete rootUidMarshaller;
-	// TODO If this is uncommented rootDir gets deleted twice. Why?
-// 	delete rootDir;
+	delete rootDirMarshaller;
+	delete rootDir;
+	delete accessManager;
 	delete marshaller;
+
+	fs::remove_all(tmpDir);
     }
 
     void testFindNodeForRootDir() {
@@ -50,6 +72,51 @@ public:
 
     void testFindNodeForNonExistingFile() {
 	TS_ASSERT_EQUALS((Node *) 0, fs->findNode("/doesnt_exist"));
+    }
+
+    void testUtimensTvNull() {
+	fs->utimens("/foo", NULL);
+
+	time_t now = time(NULL);
+	struct stat stbuf;
+
+	fs->getAttr("/foo", &stbuf);
+	TS_ASSERT_EQUALS(stbuf.st_atime, now);
+	TS_ASSERT_EQUALS(stbuf.st_mtime, now);
+    }
+
+    void testUtimensATimeSkipMTimeNow() {
+	struct timespec tv[2];
+
+	tv[0].tv_nsec = UTIME_OMIT;
+	tv[1].tv_nsec = UTIME_NOW;
+
+	fs->utimens("/foo", tv);
+
+	time_t now = time(NULL);
+	struct stat stbuf;
+
+	fs->getAttr("/foo", &stbuf);
+
+	TS_ASSERT_DIFFERS(now, stbuf.st_atime);
+	TS_ASSERT_EQUALS(now, stbuf.st_mtime);
+    }
+
+    void testUtimensATimeValMTimeNow() {
+	struct timespec tv[2];
+
+	tv[0].tv_sec = 123;
+	tv[1].tv_nsec = UTIME_NOW;
+
+	fs->utimens("/foo", tv);
+
+	time_t now = time(NULL);
+	struct stat stbuf;
+
+	fs->getAttr("/foo", &stbuf);
+
+	TS_ASSERT_EQUALS(123, stbuf.st_atime);
+	TS_ASSERT_EQUALS(now, stbuf.st_mtime);
     }
 
 };

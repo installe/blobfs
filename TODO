@@ -1,0 +1,21 @@
+* Access management.
+
+* Thread safety.
+
+* Rework file.hh/file.cc.
+
+* Rename lowercase files.
+
+* Split source in several directories (api/impl/test, node/fs/marshal).
+
+* Smarter memory management for FileData.
+
+* Support for Directories (= subclass of Parent & Child)
+
+* NodeAttr & name should be attributes of Child; move it out of File.
+
+* Store usernames & groupnames iso uids & gids.
+
+* Support eviction.
+
+* Support cache management.

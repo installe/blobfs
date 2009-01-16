@@ -1,0 +1,54 @@
+#include <cxxtest/TestSuite.h>
+
+#include "Config.hh"
+
+#include <boost/filesystem.hpp>
+
+using boost::filesystem::create_directories;
+
+class ConfigTest : public CxxTest::TestSuite {
+
+private:
+    fs::path tmpDir;
+
+    void setUp() {
+	tmpDir = fs::path(fs::current_path() / "test");
+	fs::create_directories(tmpDir);
+    }
+
+    void tearDown() {
+	fs::remove_all(tmpDir);
+    }
+
+public:
+    void testLoadNonExistingConfig() {
+	Config config(tmpDir / "foo");
+
+	config.load();
+
+	TS_ASSERT(! config["bla"]);
+	TS_ASSERT(! config["bla"]);
+
+	config["foo"] = "42";
+
+	TS_ASSERT_EQUALS("42", config["foo"]);
+    }
+
+    void testLoadExistingConfig() {
+	Config config1(tmpDir / "foo");
+
+	config1["foo"] = "burps";
+	config1["bar"] = "42";
+
+	config1.store();
+
+	Config config2(tmpDir / "foo");
+
+	config2.load();
+
+	TS_ASSERT_EQUALS("burps", config2["foo"]);
+	TS_ASSERT_EQUALS("42", config2["bar"]);
+	TS_ASSERT(! config2["bla"]);
+    }
+
+};

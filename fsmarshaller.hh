@@ -40,19 +40,19 @@ public:
     virtual size_t getFileSize(const FileHandle fHandle) const
 	throw(IoError) = 0;
 
-    virtual void setFileStringAttr(const FileHandle fHandle, const string key,
-				   const string value) const
+    virtual void setStringAttr(const FileHandle fHandle, const string key,
+			       const string value) const
 	throw(IoError) = 0;
 
-    virtual string getFileStringAttr(const FileHandle fHandle,
-				     const string key) const
+    virtual string getStringAttr(const FileHandle fHandle,
+				 const string key) const
 	throw(IoError) = 0;
 
-    virtual void setFileLongAttr(const FileHandle fHandle, const string key,
-				 long value) const
+    virtual void setLongAttr(const FileHandle fHandle, const string key,
+			     long value) const
 	throw(IoError) = 0;
 
-    virtual long getFileLongAttr(const FileHandle fHandle, const string key)
+    virtual long getLongAttr(const FileHandle fHandle, const string key)
 	const
 	throw(IoError) = 0;
 
@@ -83,6 +83,17 @@ public:
 	throw(IoError) = 0;
 
     // Dir related methods
+
+    virtual const Uid storeDir(const DirHandle dirHandle)
+	throw(IoError) = 0;
+
+    // Adding nodes to a Dir/RootDir
+
+    virtual FileHandle toFileHandle(const DirHandle dirHandle)
+	throw(IoError) = 0;
+
+    virtual FileHandle addSubdir(const DirHandle dirHandle, const Uid uid)
+	throw(IoError) = 0;
 
 };
 

@@ -6,16 +6,21 @@
 #include "NodeAttr.hh"
 #include "NodeAttrPersistStrategy.hh"
 
+#include <log4cpp/Category.hh>
+
 class NodeAttrImpl : public NodeAttr {
 
 private:
+    static log4cpp::Category& cat;
+
     struct stat attr;
 
     Node& node;
     NodeAttrPersistStrategy& strategy;
+    mode_t type;
 
 public:
-    NodeAttrImpl(Node& node, NodeAttrPersistStrategy& strategy)
+    NodeAttrImpl(Node& node, NodeAttrPersistStrategy& strategy, mode_t nodeType)
 	throw();
 
     void setAttr(const struct stat& stbuf)

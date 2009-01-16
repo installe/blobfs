@@ -14,9 +14,10 @@
 #include "filehandle.hh"
 #include "fsmarshaller.hh"
 #include "NodeAttrMarshaller.hh"
+#include "ChildFactory.hh"
 #include "NodeHandleIterator.hh"
 #include "ParentAttrPersistStrategy.hh"
-#include "ChildIterator.hh" // TODO Remove?
+#include "RootDirMarshaller.hh"
 #include "Uid.hh"
 
 using namespace std;
@@ -151,11 +152,12 @@ VirtualFileState::VirtualFileState(File &file, FileHandle fHandle)
     throw(IoError)
     : file(file), fHandle(fHandle)
 {
-    FsMarshaller& fsMarshaller = file.getMarshaller();
-    NodeAttrMarshaller attrMarshaller(fsMarshaller);
-    NodeAttr& attr = file.getAttr();
+    // TODO Remove
+//     FsMarshaller& fsMarshaller = file.getMarshaller();
+//     NodeAttrMarshaller attrMarshaller(fsMarshaller);
+//     NodeAttr& attr = file.getAttr();
 
-    attrMarshaller.unmarshallFile(attr, fHandle);
+//     attrMarshaller.unmarshallFile(attr, fHandle);
 }
 
 VirtualFileState::~VirtualFileState()
@@ -212,7 +214,7 @@ log4cpp::Category& NewFileState::cat =
  * NOTE: Creating a file should occur using the following sequence:
  *
  *	File& file = new File(parent, name);
- *	parent.addFile(file);
+ *	parent.addChild(file);
  *
  * As a side effect of the latter statement, the parent parent will go to dirty
  * state. This is necessary to make NewFileState::release() work correctly.
@@ -256,8 +258,8 @@ FileHandle NewFileState::addToDirHandle(DirHandle dirHandle)
     NodeAttrMarshaller attrMarshaller(marshaller);
     FileHandle newHandle = marshaller.storeFile(dirHandle, data);
 
-    // TODO Include setting name in marshallFile()?
-    marshaller.setFileStringAttr(newHandle, "fName", file.getName());
+    // TODO Include setting name in marshallChild()?
+    marshaller.setStringAttr(newHandle, "name", file.getName());
     attrMarshaller.marshallFile(file.getAttr(), newHandle);
     file.setState(*new CachedFileState(file, newHandle, data));
     return newHandle;
@@ -266,24 +268,22 @@ FileHandle NewFileState::addToDirHandle(DirHandle dirHandle)
 void NewFileState::release()
     throw(IoError)
 {
+    NodeAttr& attr = file.getAttr();
+    time_t now = time(NULL);
+
+    attr.setCTime(now);
+    attr.setMTime(now);
+    attr.setATime(now);
+
+    // TODO: Refactor
+    // The Node interface should get the following method:
+    // _ (public)	commit(): commits a node if dirty
+    // The Parent interface should get the following method:
+    // _ (internal)	forceCommit(): does the actual work
+    // The Child interface should get the following method:
+    // _ (internal)	addToDirHandle(): used by the Parent to commit()
+    file.getParent().setDirty();
     file.getParent().release();
-//     FsMarshaller marshaller = file.getMarshaller();
-//     DirHandle dirHandle = marshaller.newDirHandle();
-
-//     for (ChildIterator it = file.getParent().childIterator(); it.hasNext(); /* */) {
-// 	File &file = it.next();
-
-// 	marshaller.addFileHandle(file.addToDirHandle(dirHandle));
-//     }
-
-    
-
-//     FsMarshaller marshaller = file.getMarshaller();
-//     DirHandle dirHandle = 
-
-//     FileHandle fHandle = file.getMarshaller().storeFile(dirHandle, data);
-
-//     file.setState(*new CachedFileState(file, fHandle, data));
 }
 
 // TODO Can I remove this?
@@ -298,7 +298,7 @@ CachedFileState::CachedFileState(File& file, FileHandle fHandle,
     : file(file), fHandle(fHandle), data(data) { }
 
 CachedFileState::~CachedFileState()
-    throw() { }
+    throw() { } // TOOD Should release FileHandle
 
 ssize_t CachedFileState::getSize() const throw()
 {
@@ -376,7 +376,7 @@ FileHandle DirtyFileState::addToDirHandle(DirHandle dirHandle)
     FileHandle newHandle = marshaller.storeFile(dirHandle, data);
 
     marshaller.closeFileHandle(fHandle);
-    marshaller.setFileStringAttr(newHandle, "fName", file.getName());
+    marshaller.setStringAttr(newHandle, "name", file.getName());
     attrMarshaller.marshallFile(file.getAttr(), newHandle);
     file.setState(*new CachedFileState(file, newHandle, data));
     return newHandle;
@@ -385,33 +385,34 @@ FileHandle DirtyFileState::addToDirHandle(DirHandle dirHandle)
 void DirtyFileState::release()
     throw(IoError)
 {
+    time_t now = time(NULL);
+    NodeAttr& attr = file.getAttr();
+
+    attr.setCTime(now);
+    attr.setMTime(now);
+    attr.setATime(now);
+
+    file.getParent().setDirty();
     file.getParent().release();
-
-//     FsMarshaller& marshaller = file.getParent().getMarshaller();
-//     DirHandle dirHandle = marshaller.newDirHandle();
-//     FileHandle fHandle = file.getMarshaller().storeFile(dirHandle, data);
-
-//     file.setState(*new CachedFileState(file, fHandle, data));
-//     file.getParent().release();
 }
 
 log4cpp::Category& File::cat = log4cpp::Category::getInstance("File");
 
 File::File(FsMarshaller& fsMarshaller, Parent& parent, const string name)
     throw()
-    : marshaller(fsMarshaller), parent(parent), name(name),
+    : Child(parent, name, S_IFREG), marshaller(fsMarshaller),
       state(new NewFileState(*this))
 {
-    cat.debug("File::File(%s)", name.c_str());
+    cat.debug("File::File(%s)", getName().c_str());
 }
 
 File::File(FsMarshaller& fsMarshaller, Parent& parent, const string name,
 	   const FileHandle fHandle)
     throw(IoError)
-    : marshaller(fsMarshaller), parent(parent), name(name),
+    : Child(parent, name, S_IFREG), marshaller(fsMarshaller),
       state(new VirtualFileState(*this, fHandle))
 {
-    cat.debug("File::File(%s, fHandle)", name.c_str());
+    cat.debug("File::File(%s, fHandle)", getName().c_str());
 }
 
 FsMarshaller& File::getMarshaller() const
@@ -419,27 +420,6 @@ FsMarshaller& File::getMarshaller() const
 {
     return marshaller;
 }
-
-Parent& File::getParent() const
-    throw()
-{
-    return parent;
-}
-
-const string File::getName() const
-    throw()
-{
-    return name;
-}
-
-// TODO Remove?
-// NodeAttr& File::getAttr()
-//     throw()
-// {
-//     Child::getAttr().setMode((Child::getAttr().getMode() | S_IFREG) & ~S_IFDIR);
-
-//     return Child::getAttr();
-// }
 
 // TODO Use attr.getSize() for this.
 ssize_t File::getSize() const
@@ -494,40 +474,10 @@ void File::release()
 File::~File()
     throw()
 {
-    cat.debug("File::~File(%s)", name.c_str());
+    delete state;
+
+    cat.debug("File::~File(%s)", getName().c_str());
 }
-
-// void File::setSize(size_t _size) { size = _size; }
-
-// size_t File::getSize() const { return size; }
-
-// void File::setCached(bool _cached) { cached = _cached; }
-
-// bool File::isCached() const { return cached; }
-
-// bool File::isDirty() const { return dirty; }
-
-// FileHandle File::getFileHandle() const { return fHandle; }
-
-// void File::setFileHandle(const FileHandle _fHandle) { fHandle = _fHandle; }
-
-// void File::setDirty(bool _dirty)
-// {
-//     dirty = _dirty;
-
-//     cat.debug("Set file <%s> to %s", name.c_str(), dirty ? "dirty" : "clean");
-
-//     if (dir != NULL)
-// 	dir->setDirty(true);
-// }
-
-// FileWriter* File::getWriter()
-// {
-//     if (writer == NULL)
-// 	writer = new FileWriter();
-
-//     return writer;
-// }
 
 // TODO Exists in ChildIterator as well; remove code duplication
 typedef boost::shared_ptr<vector <Child *> > ChildVector;
@@ -550,10 +500,10 @@ public:
     ChildIterator childIterator()
 	throw(IoError);
 
-    void addFile(File& file)
+    void addChild(Child& child)
 	throw(IoError);
 
-    void removeFile(File& file)
+    void removeChild(Child& child)
 	throw(IoError);
 
     void setDirty()
@@ -581,10 +531,10 @@ public:
     ChildIterator childIterator()
 	throw();
 
-    void addFile(File& file)
+    void addChild(Child& child)
 	throw();
 
-    void removeFile(File& file)
+    void removeChild(Child& child)
 	throw();
 
     void setDirty()
@@ -615,10 +565,10 @@ public:
     ChildIterator childIterator()
 	throw();
 
-    void addFile(File& file)
+    void addChild(Child& child)
 	throw();
 
-    void removeFile(File& file)
+    void removeChild(Child& child)
 	throw();
 
     void setDirty()
@@ -649,10 +599,10 @@ public:
     ChildIterator childIterator()
 	throw();
 
-    void addFile(File& file)
+    void addChild(Child& child)
 	throw();
 
-    void removeFile(File& file)
+    void removeChild(Child& child)
 	throw(IoError);
 
     void setDirty()
@@ -683,12 +633,11 @@ ChildVector VirtualRootDirState::listChildren(DirHandle dirHandle) const
     ChildVector children(new vector<Child *>);
 
     while (it.hasNext()) {
-	FileHandle fHandle = it.next();
-	// TODO Call getFileStringAttr() from File ctor ?
-	string fName = marshaller.getFileStringAttr(fHandle, "fName");
-	File& file = *new File(marshaller, rootDir, fName, fHandle);
+	FileHandle handle = it.next();
+	ChildFactory factory;
+	Child& child = factory.newChild(marshaller, rootDir, handle);
 
-	children->push_back(&file);
+	children->push_back(&child);
     }
 
     return children;
@@ -705,18 +654,18 @@ ChildIterator VirtualRootDirState::childIterator()
     return ChildIterator(children);
 }
 
-void VirtualRootDirState::addFile(File& file)
+void VirtualRootDirState::addChild(Child& child)
     throw(IoError)
 {
     FsMarshaller& marshaller = rootDir.getMarshaller();
     DirHandle dirHandle = marshaller.openDirHandle(uid);
     ChildVector children = listChildren(dirHandle);
 
-    children->push_back(&file);
+    children->push_back(&child);
     rootDir.setState(*new DirtyRootDirState(rootDir, uid, dirHandle, children));
 }
 
-void VirtualRootDirState::removeFile(File& file)
+void VirtualRootDirState::removeChild(Child& child)
     throw(IoError)
 {
     FsMarshaller& marshaller = rootDir.getMarshaller();
@@ -724,9 +673,9 @@ void VirtualRootDirState::removeFile(File& file)
     ChildVector children = listChildren(dirHandle);
 
     for (vector<Child*>::iterator it = children->begin(); it != children->end(); it++) {
-	File& f = dynamic_cast<File&>(**it);
+	Child& c = **it;
 
-	if (f.getName() == file.getName()) {
+	if (c.getName() == child.getName()) {
 	    children->erase(it);
 	    rootDir.setState(*new DirtyRootDirState(rootDir, uid, dirHandle, children));
 
@@ -735,7 +684,7 @@ void VirtualRootDirState::removeFile(File& file)
     }
 
     rootDir.setState(*new CachedRootDirState(rootDir, uid, dirHandle, children));
-    throw IoError(ENOENT, "File %s doesn't exist", file.getName().c_str());
+    throw IoError(ENOENT, "Path <%s> doesn't exist", child.getName().c_str());
 }
 
 void VirtualRootDirState::setDirty()
@@ -776,25 +725,25 @@ ChildIterator NewRootDirState::childIterator()
     return ChildIterator(children);
 }
 
-void NewRootDirState::addFile(File& file)
+void NewRootDirState::addChild(Child& child)
     throw()
 {
-    children->push_back(&file);
+    children->push_back(&child);
 }
 
-void NewRootDirState::removeFile(File& file)
+void NewRootDirState::removeChild(Child& child)
     throw()
 {
     for (vector<Child*>::iterator it = children->begin(); it != children->end(); it++) {
-	File& f = dynamic_cast<File&>(**it);
+	Child& c = **it;
 
-	if (f.getName() == file.getName()) {
+	if (c.getName() == child.getName()) {
 	    children->erase(it);
 	    return;
 	}
     }
 
-    throw IoError(ENOENT, "File %s doesn't exist", file.getName().c_str());
+    throw IoError(ENOENT, "Path <%s> doesn't exist", child.getName().c_str());
 }
 
 void NewRootDirState::setDirty()
@@ -809,15 +758,15 @@ void NewRootDirState::release()
     // TODO: Seems like we only need to iterate over children in RootDir/Dir,
     // so remove childIterator() from the (public) interface.
     for (vector<Child*>::iterator it = children->begin(); it != children->end(); it++) {
-	File& file = dynamic_cast<File&>(**it);
+	Child& child = **it;
 
-	file.addToDirHandle(newDirHandle);
+	child.addToDirHandle(newDirHandle);
     }
 
     Uid uid = marshaller.storeRootDir(newDirHandle);
 
+    rootDir.getRootDirMarshaller().marshal(rootDir, uid);
     cat.debug("Switching from new to cached; children -> %p", children.get());
-
     rootDir.setState(*new CachedRootDirState(rootDir, uid, newDirHandle,
 					     children));
 }
@@ -846,33 +795,27 @@ ChildIterator CachedRootDirState::childIterator()
     cat.debug("children = %p", children.get());
     cat.debug("size = %zu", children.get()->size());
 
-    for (vector<Child*>::const_iterator it = children->begin(); it != children->end(); it++) { 
-	Child *child = *it;
-	cat.debug(" child %p", child);
-	cat.debug(" name %s", child->getName().c_str());
-    }
-
     return ChildIterator(children);
 }
 
-void CachedRootDirState::addFile(File& file)
+void CachedRootDirState::addChild(Child& child)
     throw()
 {
     RootDirState& newState =
 	*new DirtyRootDirState(rootDir, uid, dirHandle, children);
 
     rootDir.setState(newState);
-    newState.addFile(file);
+    newState.addChild(child);
 }
 
-void CachedRootDirState::removeFile(File& file)
+void CachedRootDirState::removeChild(Child& child)
     throw()
 {
     RootDirState& newState =
 	*new DirtyRootDirState(rootDir, uid, dirHandle, children);
 
     rootDir.setState(newState);
-    newState.removeFile(file);
+    newState.removeChild(child);
 }
 
 void CachedRootDirState::setDirty()
@@ -907,25 +850,26 @@ ChildIterator DirtyRootDirState::childIterator()
     return ChildIterator(children);
 }
 
-void DirtyRootDirState::addFile(File& file)
+void DirtyRootDirState::addChild(Child& child)
     throw()
 {
-    children->push_back(&file);
+    children->push_back(&child);
 }
 
-void DirtyRootDirState::removeFile(File& file)
+void DirtyRootDirState::removeChild(Child& child)
     throw(IoError)
 {
     for (vector<Child*>::iterator it = children->begin(); it != children->end(); it++) {
-	File& f = dynamic_cast<File&>(**it);
+	Child& c = **it;
 
-	if (f.getName() == file.getName()) {
+	if (c.getName() == child.getName()) {
 	    children->erase(it);
+	    delete &c;
 	    return;
 	}
     }
 
-    throw IoError(ENOENT, "File %s doesn't exist", file.getName().c_str());
+    throw IoError(ENOENT, "Path <%s> doesn't exist", child.getName().c_str());
 }
 
 void DirtyRootDirState::setDirty()
@@ -938,13 +882,15 @@ void DirtyRootDirState::release()
     DirHandle newDirHandle = marshaller.newDirHandle();
 
     for (vector<Child*>::iterator it = children->begin(); it != children->end(); it++) {
-	File& file = dynamic_cast<File&>(**it);
+	Child& child = **it;
 
-	file.addToDirHandle(newDirHandle);
+	cout << "Adding to dirHandle: <" << child.getName() << ">" << endl;
+	child.addToDirHandle(newDirHandle);
     }
 
     Uid uid = marshaller.storeRootDir(newDirHandle);
 
+    rootDir.getRootDirMarshaller().marshal(rootDir, uid);
     // TODO: RAII
     marshaller.closeDirHandle(dirHandle);
     rootDir.setState(*new CachedRootDirState(rootDir, uid, newDirHandle,
@@ -959,35 +905,23 @@ DirtyRootDirState::~DirtyRootDirState()
 
 log4cpp::Category& RootDir::cat = log4cpp::Category::getInstance("RootDir");
 
-RootDir::RootDir(FsMarshaller& marshaller)
+RootDir::RootDir(FsMarshaller& marshaller, const RootDirMarshaller& rootDirMarshaller)
     throw()
-    : marshaller(marshaller), state(new NewRootDirState(*this)),
-      attr(NodeAttrImpl(*this, *new ParentAttrPersistStrategy()))
-{
-    getAttr().setMode(S_IFDIR | S_IRWXU | S_IRGRP|S_IXGRP | S_IROTH|S_IXOTH);
-}
+    : marshaller(marshaller), rootDirMarshaller(rootDirMarshaller),
+      state(new NewRootDirState(*this)),
+      attr(NodeAttrImpl(*this, *new ParentAttrPersistStrategy(), S_IFDIR)) { }
 
-RootDir::RootDir(FsMarshaller& marshaller, const Uid uid)
+RootDir::RootDir(FsMarshaller& marshaller, const RootDirMarshaller& rootDirMarshaller,
+		 const Uid uid)
     throw(IoError)
-    : marshaller(marshaller), state(new VirtualRootDirState(*this, uid)),
-      attr(NodeAttrImpl(*this, *new ParentAttrPersistStrategy()))
-{ }
+    : marshaller(marshaller), rootDirMarshaller(rootDirMarshaller),
+      state(new VirtualRootDirState(*this, uid)),
+      attr(NodeAttrImpl(*this, *new ParentAttrPersistStrategy(), S_IFDIR)) { }
 
 RootDir::~RootDir()
     throw()
 {
-    delete &state;
-}
-
-// TODO Remove: debugging only
-RootDir::RootDir(RootDir& rootDir)
-    throw()
-    : marshaller(rootDir.marshaller), state(rootDir.state),
-      attr(NodeAttrImpl(*this, *new ParentAttrPersistStrategy()))
-{
-    int *p = NULL;
-
-    *p = 0;
+    delete state;
 }
 
 RootDir& RootDir::operator=(const RootDir& rootDir)
@@ -1001,15 +935,31 @@ RootDir& RootDir::operator=(const RootDir& rootDir)
 NodeAttr& RootDir::getAttr()
     throw()
 {
-    attr.setMode((attr.getMode() | S_IFDIR) & ~S_IFREG);
-
     return attr;
+}
+
+const NodeAttr& RootDir::getAttr() const
+    throw()
+{
+    return attr;
+}
+
+const Node& RootDir::getOwner() const
+    throw()
+{
+    return *this;
 }
 
 FsMarshaller& RootDir::getMarshaller() const
     throw()
 {
     return marshaller;
+}
+
+const RootDirMarshaller& RootDir::getRootDirMarshaller() const
+    throw()
+{
+    return rootDirMarshaller;
 }
 
 const RootDirState& RootDir::getState() const
@@ -1032,23 +982,22 @@ void RootDir::setState(RootDirState& state)
 ChildIterator RootDir::childIterator()
     throw(IoError)
 {
-//    cat.debug("state = %s, getting childiterator", typeid(state).name());
     cat.debug(__PRETTY_FUNCTION__);
     cat.debug("&state = %p", &state);
 
     return state->childIterator();
 }
 
-void RootDir::addFile(File& file)
+void RootDir::addChild(Child& child)
     throw(IoError)
 {
-    state->addFile(file);
+    state->addChild(child);
 }
 
-void RootDir::removeFile(File& file)
+void RootDir::removeChild(Child& child)
     throw(IoError)
 {
-    state->removeFile(file);
+    state->removeChild(child);
 }
 
 void RootDir::setDirty()
@@ -1062,28 +1011,6 @@ void RootDir::release()
 {
     state->release();
 }
-
-// Dir::Dir(Dir* dir, string name, const Uid uid)
-//     : File(dir, name), uid(uid), dirHandle(0), children(vector<Child*>(0))
-// {
-//     if (cat.isDebugEnabled()) {
-// 	cat.debug("Nodes for directory <%s>:", name.c_str());
-// 	for (vector<Node*>::iterator it = nodes.begin(); it != nodes.end(); it++)
-// 	    cat.debug("\t<%s>", (*it)->getName().c_str());
-//     }
-// }
-
-// const DirHandle Dir::getDirHandle() const { return dirHandle; }
-
-// void Dir::setDirHandle(DirHandle _dirHandle) { dirHandle = _dirHandle; }
-
-// const Uid Dir::getUid() const { return uid; }
-
-// void Dir::setUid(const Uid _uid) { uid = _uid; }
-
-// void Dir::addFile(File *file) { nodes.push_back(file); }
-
-// vector<Node*>* Dir::getNodes() { return &nodes; }
 
 log4cpp::Category& DirMarshallerException::cat = log4cpp::Category::getInstance("DirMarshallerException");
 

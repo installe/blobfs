@@ -1,0 +1,18 @@
+#include <cxxtest/TestSuite.h>
+
+#include "UserInfo.hh"
+
+class UserInfoTest : public CxxTest::TestSuite {
+
+public:
+    void testHomeRootUser() {
+	UserInfo info(0);
+
+	TS_ASSERT_EQUALS(path("/root"), info.home());
+    }
+
+    void testHomeNonExistingUser() {
+	TS_ASSERT_THROWS(UserInfo info(65536), InvalidArgumentError);
+    }
+
+};

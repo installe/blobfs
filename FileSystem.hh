@@ -1,10 +1,13 @@
 #ifndef _FILESYSTEM_HH_
 #define _FILESYSTEM_HH_
 
+#include "AccessManager.hh"
+#include "Clock.hh"
 #include "file.hh"
 #include "fsmarshaller.hh"
 #include "IoError.hh"
 #include "log4cpp/Category.hh"
+#include "NodeAttrHelper.hh"
 #include "Node.hh"
 #include "PathUtils.hh"
 
@@ -19,9 +22,18 @@ private:
     static log4cpp::Category& cat;
 
     FsMarshaller& marshaller;
+    AccessManager& accessManager;
     RootDir& rootDir;
+    Clock& clock;
 
     PathUtils pathUtils;
+    NodeAttrHelper nodeAttrHelper;
+
+    string fullPath(const Node& node) const
+	throw();
+
+    Child *findChild(Parent& parent, const string name) const
+	throw();
 
     Node *findNode(const string path) const
 	throw(IoError);
@@ -36,7 +48,8 @@ private:
 	throw(IoError);
 
 public:
-    FileSystem(FsMarshaller& marshaller, RootDir& rootDir)
+    FileSystem(FsMarshaller& marshaller, AccessManager& accessManager,
+	       RootDir& rootDir, Clock& clock)
 	throw();
 
     ~FileSystem()
@@ -51,6 +64,10 @@ public:
 
     int getAttr(const string path, struct stat *stbuf) const
 	throw(IoError);
+
+    // TODO Remove?
+//     int setAttr(const string path, const struct stat *stbuf) const
+// 	throw(IoError);
 
     int create(const string path, mode_t mode, fuse_file_info *fi) const
 	throw(IoError);
@@ -76,6 +93,12 @@ public:
 	throw(IoError);
 
     int chown(const string path, uid_t uid, gid_t gid) const
+	throw(IoError);
+
+    int utimens(const string path, const struct timespec tv[2]) const
+	throw(IoError);
+
+    int mkdir(const string path, mode_t mode) const
 	throw(IoError);
 
     friend class FileSystemTest;

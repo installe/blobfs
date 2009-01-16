@@ -1,7 +1,9 @@
-#include "FileSystem.hh"
 #include "Child.hh"
 #include "ChildIterator.hh"
+#include "Dir.hh"
+#include "FileSystem.hh"
 #include "Parent.hh"
+#include "UserContext.hh"
 
 #include <assert.h>
 #include <errno.h>
@@ -13,9 +15,11 @@ using namespace std;
 log4cpp::Category& FileSystem::cat =
     log4cpp::Category::getInstance("FileSystem");
 
-FileSystem::FileSystem(FsMarshaller& marshaller, RootDir& rootDir)
+FileSystem::FileSystem(FsMarshaller& marshaller, AccessManager& accessManager,
+		       RootDir& rootDir, Clock& clock)
     throw()
-    : marshaller(marshaller), rootDir(rootDir), pathUtils()
+    : marshaller(marshaller), accessManager(accessManager), rootDir(rootDir),
+      clock(clock), pathUtils()
 {
     cat.debug("&rootDir == %p", &rootDir);
 }
@@ -23,7 +27,31 @@ FileSystem::FileSystem(FsMarshaller& marshaller, RootDir& rootDir)
 FileSystem::~FileSystem()
     throw() { }
 
-Node* FileSystem::findNode(const string path) const
+string FileSystem::fullPath(const Node& node) const
+    throw()
+{
+    string name;
+
+    while (const Child *child = dynamic_cast<const Child *>(&node))
+	name = child->getName() + '/' + name;
+
+    return name;
+}
+
+Child *FileSystem::findChild(Parent& parent, const string name) const
+    throw()
+{
+    for (ChildIterator it = parent.childIterator(); it.hasNext(); /* */) {
+	Child *child = it.next();
+
+	if (child->getName() == name)
+	    return child;
+    }
+
+    return NULL;
+}
+
+Node *FileSystem::findNode(const string path) const
     throw(IoError)
 {
     PathIterator it(path);
@@ -31,16 +59,27 @@ Node* FileSystem::findNode(const string path) const
     if (!it.hasNext())
 	return &rootDir;
 
-    string part = it.next();
+    UserContext context;
+    Node *node = &rootDir;
 
-    for (ChildIterator it = rootDir.childIterator(); it.hasNext(); /* */) {
-	Child* child = it.next();
+    do {
+	Parent *parent = dynamic_cast<Parent *>(node);
 
-	if (child->getName() == part)
-	    return child;
-    }
+	if (parent == NULL) {
+	    throw IoError(ENOTDIR, "path <%s> is not a directory",
+			  fullPath(*node).c_str());
+	}
 
-    return NULL;
+	// TODO Fix
+// 	accessManager.checkExecutable(*parent, fullPath(*parent),
+// 				      context);
+	node = findChild(*parent, it.next());
+
+	if (node == NULL)
+	    return NULL;
+    } while (it.hasNext());
+
+    return node;
 }
 
 Node& FileSystem::getNode(const string path) const
@@ -115,8 +154,10 @@ int FileSystem::readDir(const string path, void *buf, fuse_fill_dir_t filler,
     cat.debug("reading directory <%s>", path.c_str());
 
     // TODO Keep state in between readDir calls
+    UserContext context;
     Parent& parent = getParent(path);
 
+    accessManager.checkReadable(parent, path, context);
     cat.debug("Found parent: %p", &parent);
 
     if (filler(buf, ".", NULL, 0) != 0)
@@ -169,44 +210,53 @@ int FileSystem::getAttr(const string path, struct stat *stbuf) const
     Node &node = getNode(path);
     NodeAttr& attr = node.getAttr();
 
+    cat.debug("mode for <%s>: %i (address = %p)", path.c_str(), attr.getMode(),
+	      &attr);
     attr.getAttr(*stbuf);
     return 0;
-
-    // TODO Refactor: Node should beget a getAttr() method
-//     if (File *file = dynamic_cast<File *>(node)) {
-// 	cat.debug(" found a file");
-// 	stbuf->st_mode = S_IFREG | S_IRWXU | S_IRWXG | S_IRWXO;
-// 	stbuf->st_nlink = 1;
-// 	stbuf->st_size = file->getSize();
-//     } else if (dynamic_cast<RootDir *>(node) != NULL) {
-// 	cat.debug(" found a directory");
-// 	stbuf->st_mode =
-// 	    S_IFDIR | S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH;
-// 	stbuf->st_nlink = 2;
-// 	stbuf->st_size = 0;
-//     } else {
-// 	cat.debug(" huh?");
-// 	assert(false); // never reached
-//     }
-
-//     cat.debug("got attributes for <%s>", path.c_str());
-    return 0;
 }
+
+// TODO Remove?
+// int FileSystem::setAttr(const string path, const struct stat *stbuf) const
+//     throw(IoError)
+// {
+//     cat.debug("setting attributes for <%s>", path.c_str());
+
+//     Node& node = getNode(path);
+//     NodeAttr& attr = node.getAttr();
+
+//     attr.setAttr(*stbuf);
+//     attr.persist();
+//     return 0;
+// }
 
 int FileSystem::create(const string path, mode_t mode, fuse_file_info *fi) const
     throw(IoError)
 {
     cat.debug("creating file <%s>", path.c_str());
 
+    UserContext context;
     Node *node = findNode(path);
 
     if (node != NULL)
 	throw IoError(EEXIST, "path <%s> already exists", path.c_str());
 
-    File& file = *new File(marshaller, rootDir, pathUtils.baseName(path));
+    string parentPath = pathUtils.dirName(path);
+    Parent& parent = getParent(parentPath);
 
-    rootDir.addFile(file);
-    file.getAttr().setMode(mode);
+    accessManager.checkWritable(parent, "/", context);
+
+    File& file = *new File(marshaller, parent, pathUtils.baseName(path));
+    NodeAttr& attr = file.getAttr();
+    time_t now = clock.time();
+
+    parent.addChild(file);
+    attr.setUid(context.getUid());
+    attr.setGid(context.getGid());
+    nodeAttrHelper.setPerms(attr, mode);
+    attr.setCTime(now);
+    attr.setMTime(now);
+    attr.setATime(now);
 
     fi->fh = (uint64_t) &file;
 
@@ -219,9 +269,27 @@ int FileSystem::open(const string path, fuse_file_info *fi) const
 {
     cat.debug("opening file <%s>", path.c_str());
 
+    UserContext context;
     File& file = getFile(path);
+    int accessMode = fi->flags & O_ACCMODE;
 
-    // TODO Change solution to avoid casting
+    if (accessMode == O_RDONLY) {
+	accessManager.checkReadable(file, path, context);
+    } else if (accessMode == O_WRONLY) {
+	accessManager.checkWritable(file, path, context);
+    } else if (accessMode == O_RDWR) {
+	accessManager.checkReadable(file, path, context);
+	accessManager.checkWritable(file, path, context);
+    } else {
+	throw IoError(EINVAL, "Invalid access mode: %i", accessMode);
+    }
+
+    file.getAttr().setATime(clock.time());
+
+    // TODO Change solution to avoid casting - How?
+    // TODO We should fill this in with a class that contains a reference to
+    // a file + the access mode that was used for opening, so we can check
+    // access permissions later on!
     fi->fh = (uint64_t) &file;
 
     cat.debug("opened file <%s> successfully", path.c_str());
@@ -233,10 +301,13 @@ int FileSystem::unlink(const string path) const
 {
     cat.debug("unlinking file <%s>", path.c_str());
 
+    UserContext context;
     File& file = getFile(path);
     Parent& parent = file.getParent();
 
-    parent.removeFile(file);
+    accessManager.checkModifiable(file, path, context);
+    parent.removeChild(file);
+    parent.release();
 
     return 0;
 }
@@ -250,7 +321,10 @@ int FileSystem::read(const string path, void *buf, size_t size, off_t offset,
 
     File& file = *((File *) fi->fh);
 
+    // TODO Verify that the file was opened for reading
     assert(file.getName() == pathUtils.baseName(path));
+    accessManager.checkReadable(file, path, UserContext());
+    file.getAttr().setATime(clock.time());
 
     return file.read(buf, offset, size);
 }
@@ -263,8 +337,13 @@ int FileSystem::write(const string path, const void *buf, size_t size,
 	      path.c_str(), offset, size);
 
     File& file = *((File *) fi->fh);
+    time_t now = clock.time();
 
+    // TODO Verify that the file was opened for writing
     assert(file.getName() == pathUtils.baseName(path));
+    accessManager.checkWritable(file, path, UserContext());
+    file.getAttr().setATime(now);
+    file.getAttr().setMTime(now);
 
     return file.write(buf, offset, size);
 }
@@ -288,10 +367,13 @@ int FileSystem::chmod(const string path, mode_t mode) const
 {
     cat.debug("changing permissions for file <%s>", path.c_str());
 
+    UserContext context;
     Node& node = getNode(path);
     NodeAttr& attr = node.getAttr();
 
-    attr.setMode(mode);
+    accessManager.checkModifiable(node, path, context);
+    nodeAttrHelper.setPerms(attr, mode);
+    attr.setCTime(time(NULL));
     attr.persist();
 
     return 0;
@@ -302,12 +384,82 @@ int FileSystem::chown(const string path, uid_t uid, gid_t gid) const
 {
     cat.debug("changing ownership for file <%s> to %i:%i", path.c_str(), uid, gid);
 
+    UserContext context;
     Node& node = getNode(path);
     NodeAttr& attr = node.getAttr();
 
-    attr.setUid(uid);
-    attr.setGid(gid);
+    accessManager.checkModifiable(node, path, context);
+    accessManager.checkWritable(node.getOwner(), path, context);
+
+    if (uid != static_cast<unsigned>(-1)) attr.setUid(uid);
+    if (gid != static_cast<unsigned>(-1)) attr.setGid(gid);
+    attr.setCTime(time(NULL));
     attr.persist();
 
+    return 0;
+}
+
+static time_t determineTime(time_t current, const struct timespec tv)
+    throw()
+{
+    if (tv.tv_nsec == UTIME_NOW)
+	return time(NULL);
+
+    if (tv.tv_nsec == UTIME_OMIT)
+	return current;
+
+    return tv.tv_sec;
+}
+
+int FileSystem::utimens(const string path, const struct timespec tv[2]) const
+    throw(IoError)
+{
+    cat.debug("setting access/modification times for <%s>", path.c_str());
+
+    UserContext context;
+    Node& node = getNode(path);
+    NodeAttr& attr = node.getAttr();
+
+    accessManager.checkModifiable(node, path, context);
+
+    if (tv == NULL) {
+	time_t now = time(NULL);
+
+	attr.setATime(now);
+	attr.setMTime(now);
+    } else {
+	attr.setATime(determineTime(attr.getATime(), tv[0]));
+	attr.setMTime(determineTime(attr.getMTime(), tv[1]));
+    }
+
+    attr.persist();
+    return 0;
+}
+
+int FileSystem::mkdir(const string path, mode_t mode) const
+    throw(IoError)
+{
+    cat.debug("creating directory <%s>", path.c_str());
+
+    string parentPath = pathUtils.dirName(path);
+    UserContext context;
+    Parent& parent = getParent(parentPath);
+
+    accessManager.checkWritable(parent, parentPath, context);
+
+    Dir& dir = *new Dir(marshaller, parent, pathUtils.baseName(path));
+    NodeAttr& attr = dir.getAttr();
+    time_t now = clock.time();
+
+    parent.addChild(dir);
+    attr.setUid(context.getUid());
+    attr.setGid(context.getGid());
+    nodeAttrHelper.setPerms(attr, mode);
+    attr.setCTime(now);
+    attr.setMTime(now);
+    attr.setATime(now);
+    dir.release();
+
+    cat.debug("created dir <%s> successfully", path.c_str());
     return 0;
 }

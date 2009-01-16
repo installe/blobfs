@@ -1,6 +1,7 @@
 #ifndef _CHILD_HH_
 #define _CHILD_HH_
 
+#include "filehandle.hh"
 #include "Node.hh"
 #include "NodeAttrImpl.hh"
 
@@ -10,23 +11,37 @@ using namespace std;
 
 class Parent;
 
-class Child : public Node {
+class Child : public virtual Node {
 
 private:
+    Parent& parent;
+    string name;
     NodeAttrImpl attr;
 
 public:
-    Child()
+    Child(Parent& parent, string name, mode_t nodeType)
+	throw();
+
+    const string getName() const
+	throw();
+
+    const Parent& getParent() const
+	throw();
+
+    Parent& getParent()
+	throw();
+
+    const NodeAttr& getAttr() const
 	throw();
 
     NodeAttr& getAttr()
 	throw();
 
-    virtual const string getName() const
-	throw() = 0;
+    const Node& getOwner() const
+	throw();
 
-    virtual Parent& getParent() const
-	throw() = 0;
+    virtual FileHandle addToDirHandle(DirHandle dirHandle)
+	throw(IoError) = 0;
 
     ~Child()
 	throw() { };

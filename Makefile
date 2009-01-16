@@ -4,7 +4,7 @@ OPTIONS = -Wall -Werror -DPOSIX -D_FILE_OFFSET_BITS=64 -DFUSE_USE_VERSION=26 -g3
 CXXFLAGS = $(INCLUDES) $(OPTIONS)
 #LDFLAGS = -L$(HOME)/src/filepoollib/Linux-GCC4/lib -lFPLibrary32
 #LDFLAGS = -L$(HOME)/src/slave/svn/cas/router/trunk/build/stage/cubetools/linux -lFPCore32 -lFPLibrary -lFPParser32 -lFPStreams32 -lFPUtils32 -lFPXML32 -lPAI_module32 -L/usr/lib/libstdc++.so.5 -g
-LDFLAGS = -L$(HOME)/src/slave/svn/cas/router/trunk/build/stage/cubetools/linux -Wl,-rpath,$(HOME)/src/slave/svn/cas/router/trunk/build/stage/cubetools/linux -lFPCore32 -lFPLibrary -lFPParser32 -lFPStreams32 -lFPUtils32 -lFPXML32 -lPAI_module32 -llog4cpp -lfuse -g3
+LDFLAGS = -L$(HOME)/src/slave/svn/cas/router/trunk/build/stage/cubetools/linux -Wl,-rpath,$(HOME)/src/slave/svn/cas/router/trunk/build/stage/cubetools/linux -lFPCore32 -lFPLibrary -lFPParser32 -lFPStreams32 -lFPUtils32 -lFPXML32 -lPAI_module32 -llog4cpp -lfuse -lboost_filesystem-mt -lboost_thread-mt -g3
 
 SRC = $(filter-out runtests.cc, $(wildcard *.cc))
 ### TEMP!
@@ -49,6 +49,8 @@ runtests.cc: $(TST) $(LIB)
 
 %: %.o $(LIB)
 	$(CXX) $(LDFLAGS) -o $@ $^
+	sudo chown root.root $@
+	sudo chmod u+s $@
 
 .depend: $(SRC)
 	touch .depend

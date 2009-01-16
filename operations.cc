@@ -49,6 +49,21 @@ static int fs_getAttr(const char *path, struct stat *stbuf)
     }
 }
 
+// TODO Remove?
+// static int fs_setAttr(const char *path, const struct stat *stbuf)
+//     throw()
+// {
+//     try {
+// 	return fs->setAttr(path, stbuf);
+//     } catch (IoError e) {
+// 	cat.error(e.what());
+// 	return -e.errcode();
+//     } catch (...) {
+// 	cat.error("Caught unexpected exception");
+// 	return -EFAULT;
+//     }
+// }
+
 static int fs_open(const char *path, struct fuse_file_info *fi)
     throw()
 {
@@ -179,6 +194,38 @@ static int fs_chown(const char *path, uid_t uid, gid_t gid)
     return 0;
 }
 
+static int fs_utimens(const char *path, const struct timespec tv[2])
+    throw()
+{
+    try {
+	fs->utimens(path, tv);
+    } catch (IoError e) {
+	cat.error(e.what());
+	return -e.errcode();
+    } catch (...) {
+	cat.error("Caught unexpected exception");
+	return -EFAULT;
+    }
+
+    return 0;
+}
+
+static int fs_mkdir(const char *path, mode_t mode)
+    throw(IoError)
+{
+    try {
+	fs->mkdir(path, mode);
+    } catch (IoError e) {
+	cat.error(e.what());
+	return -e.errcode();
+    } catch (...) {
+	cat.error("Caught unexpected exception");
+	return -EFAULT;
+    }
+
+    return 0;
+}
+
 fuse_operations *operations()
     throw()
 {
@@ -187,6 +234,8 @@ fuse_operations *operations()
      oper->readdir = fs_readDir;
      oper->access = fs_access;
      oper->getattr = fs_getAttr;
+     // TODO Remove?
+//     oper->setattr = fs_setAttr;
      oper->open = fs_open;
      oper->create = fs_create;
      oper->unlink = fs_unlink;
@@ -195,6 +244,8 @@ fuse_operations *operations()
      oper->release = fs_release;
      oper->chmod = fs_chmod;
      oper->chown = fs_chown;
+     oper->utimens = fs_utimens;
+     oper->mkdir = fs_mkdir;
 
      return oper;
 }

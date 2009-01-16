@@ -1,0 +1,24 @@
+#include <cxxtest/TestSuite.hh>
+
+#include "LockableMock.hh"
+#include "LockGuardStack.hh"
+
+class LockGuardStackTest : public cxxtest::TestSuite {
+
+private:
+    LockableMock l[10];
+
+    void verifyLocks(bool locked[10]) {
+	
+    }
+
+public:
+    void testStackUnwind() {
+	LockGuardStack stack;
+
+	stack.push(LockGuard(l1));
+	stack.push(LockGuard(l2));
+	stack.push(LockGuard(l3));
+    }
+
+};

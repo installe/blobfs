@@ -9,6 +9,12 @@ public:
     virtual NodeAttr& getAttr()
 	throw() = 0;
 
+    virtual const NodeAttr& getAttr() const
+	throw() = 0;
+
+    virtual const Node& getOwner() const
+	throw() = 0;
+
     virtual ~Node()
 	throw() { };
 

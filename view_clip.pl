@@ -5,11 +5,13 @@ use strict;
 use warnings;
 
 sub getClip() {
-	open(FH, "/home/arnaud/.blobfs/rootclip")
+	open(FH, $ENV{'HOME'} . "/.blobfs/rootclip")
 		|| die "Can't open rootclip";
 
 	while (<FH>) {
 		my $clip = $_;
+
+		$clip =~ s/rootdir.clip = // || next;
 
 		chomp($clip);
 		close(FH);
@@ -36,7 +38,13 @@ sub getClipFile($) {
 }
 
 sub main($) {
-	my $clip = getClip();
+	my $clip = shift;
+
+	if (! defined($clip)) {
+		$clip = getClip();
+	}
+
+#	my $clip = getClip();
 #	my $clip = shift;
 	my $normClip = invert($clip);
 	my $file = getClipFile($normClip);

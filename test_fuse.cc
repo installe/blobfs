@@ -1,6 +1,9 @@
+#include "AccessManagerImpl.hh"
 #include "BlobFsMarshaller.hh"
 #include "file.hh"
 #include "operations.hh"
+#include "RootDirMarshallerImpl.hh"
+#include "SystemClock.hh"
 
 #include <fstream>
 #include <log4cpp/BasicConfigurator.hh>
@@ -15,8 +18,6 @@ using namespace std;
 
 log4cpp::Category& cat = log4cpp::Category::getRoot();
 
-Uid loadUid();
-void storeUid(Uid uid);
 int main(int argc, char **argv);
 
 static void setup_logging() {
@@ -27,23 +28,9 @@ static void setup_logging() {
      cat.setPriority(log4cpp::Priority::DEBUG);
      cat.setAdditivity(true);
      cat.addAppender(fileAppender);
-}
 
-RootDir& createRootDir(RootUidMarshaller& rootUidMarshaller,
-		       FsMarshaller& fsMarshaller)
-    throw(IoError)
-{
-    Uid uid;
-
-    if (rootUidMarshaller.loadRootUid(uid)) {
-	cat.info("Found root clip: <%s>", uid.getClipID());
-
-	return *new RootDir(fsMarshaller, uid);
-    }
-
-    cat.warn("Didn't find a rootclip.");
-
-    return *new RootDir(fsMarshaller);
+     // TODO Enable?
+//      std::set_terminate (__gnu_cxx::__verbose_terminate_handler);
 }
 
 int main(int argc, char **argv) {
@@ -54,13 +41,17 @@ int main(int argc, char **argv) {
 	  return 1;
      }
 
+     // TODO RAII for new objects? smart_ptr?
      string address = argv[1];
-     RootUidMarshaller rootUidMarshaller("/home/arnaud/.blobfs/rootclip");
+     RootDirMarshallerImpl rootDirMarshaller(".blobfs/rootclip");
      BlobFsMarshaller& marshaller =
-	 *new BlobFsMarshaller(rootUidMarshaller, address);
-     RootDir& rootDir = createRootDir(rootUidMarshaller, marshaller);
+	 *new BlobFsMarshaller(address);
+     RootDir& rootDir = 
+	 rootDirMarshaller.unmarshal(marshaller);
+     AccessManager& accessManager = *new AccessManagerImpl();
+     Clock& clock = *new SystemClock();
 
-     fs = new FileSystem(marshaller, rootDir);
+     fs = new FileSystem(marshaller, accessManager, rootDir, clock);
 
      fuse_main(argc - 1, argv + 1, operations(), NULL);
 

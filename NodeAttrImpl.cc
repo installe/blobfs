@@ -1,19 +1,28 @@
 #include "NodeAttrImpl.hh"
 
+#include <log4cpp/Category.hh>
 #include <string.h>
 
-NodeAttrImpl::NodeAttrImpl(Node& node, NodeAttrPersistStrategy& strategy)
+log4cpp::Category& NodeAttrImpl::cat =
+    log4cpp::Category::getInstance("NodeAttrImpl");
+
+NodeAttrImpl::NodeAttrImpl(Node& node, NodeAttrPersistStrategy& strategy,
+			   mode_t nodeType)
     throw()
-    : node(node), strategy(strategy)
+    : node(node), strategy(strategy), type(nodeType)
 {
     // TODO
     memset(&attr, 0, sizeof(attr));
+    setMode(nodeType);
 }
 
 void NodeAttrImpl::setAttr(const struct stat& stbuf)
     throw()
 {
     attr = stbuf;
+    setMode(attr.st_mode);
+
+    cat.debug("Set mode to %lo", attr.st_mode, this);
 }
 
 void NodeAttrImpl::getAttr(struct stat& stbuf) const
@@ -29,7 +38,10 @@ off_t NodeAttrImpl::getSize()
     throw() { return attr.st_size; }
 
 void NodeAttrImpl::setMode(mode_t mode)
-    throw() { attr.st_mode = mode; }
+    throw()
+{
+    attr.st_mode = type | (mode & ~S_IFMT);
+}
 
 mode_t NodeAttrImpl::getMode() const
     throw() { return attr.st_mode; }

@@ -15,20 +15,27 @@ private:
 
     FsMarshaller& marshaller;
 
+    void marshallNode(const NodeAttr& attr, const FileHandle fHandle) const
+	throw(IoError);
+
+    void unmarshallNode(NodeAttr& attr, const FileHandle fHandle) const
+	throw(IoError);
+
 public:
+    // TODO make FsMarshaller const
     NodeAttrMarshaller(FsMarshaller& marshaller)
 	throw();
 
-    void marshallFile(const NodeAttr& attr, FileHandle fHandle) const
+    void marshallFile(const NodeAttr& attr, const FileHandle fHandle) const
 	throw(IoError);
 
-    void unmarshallFile(NodeAttr& attr, FileHandle fHandle) const
+    void unmarshallFile(NodeAttr& attr, const FileHandle fHandle) const
 	throw(IoError);
 
-    void marshallRootDir(const NodeAttr& attr, DirHandle dirHandle) const
+    void marshallDir(const NodeAttr& attr, const FileHandle fHandle) const
 	throw(IoError);
 
-    void unmarshallRootDir(NodeAttr& attr, DirHandle dirHandle) const
+    void unmarshallDir(NodeAttr& attr, const FileHandle fHandle) const
 	throw(IoError);
 };
 

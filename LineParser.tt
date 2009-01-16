@@ -1,0 +1,33 @@
+#include <cxxtest/TestSuite.h>
+
+#include "LineParser.hh"
+
+class LineParserTest : public CxxTest::TestSuite {
+
+public:
+    void testValidLineNoSpaces() {
+	LineParser p("foo=bar");
+
+	TS_ASSERT_EQUALS("foo", p.getKey());
+	TS_ASSERT_EQUALS("bar", p.getVal());
+    }
+
+    void testValidLineWithSpaces() {
+	LineParser p("foo = bar");
+
+	TS_ASSERT_EQUALS("foo", p.getKey());
+	TS_ASSERT_EQUALS("bar", p.getVal());
+    }
+
+    void testValidLineWithSpacesBeforeKey() {
+	LineParser p("    foo = bar");
+
+	TS_ASSERT_EQUALS("foo", p.getKey());
+ 	TS_ASSERT_EQUALS("bar", p.getVal());
+    }
+
+    void testInvalidLine() {
+	TS_ASSERT_THROWS(LineParser p(" foo bar = bla"), ParseError);
+    }
+
+};

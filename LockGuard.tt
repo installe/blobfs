@@ -1,0 +1,28 @@
+#include <cxxtest/TestSuite.h>
+
+#include "LockableMock.hh"
+#include "LockGuard.hh"
+
+class LockGuardTest : public CxxTest::TestSuite {
+
+private:
+    LockableMock lock;
+
+    LockGuard<LockableMock> guard() {
+	LockGuard<LockableMock> l(lock);
+
+	return l;
+    }
+
+public:
+    void testLockGuard() {
+	{
+	    LockGuard<LockableMock> l(guard());
+
+	    TS_ASSERT(lock.isLocked());
+	}
+
+	TS_ASSERT(! lock.isLocked());
+    }
+
+};

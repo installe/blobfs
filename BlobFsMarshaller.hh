@@ -3,7 +3,6 @@
 
 #include "fsmarshaller.hh"
 #include "NodeHandleIterator.hh"
-#include "RootUidMarshaller.hh"
 
 #include <FPAPI.h>
 #include <log4cpp/Category.hh>
@@ -18,9 +17,7 @@ private:
     static log4cpp::Category& cat;
 
     string address;
-    bool connected;
     FPPoolRef pool;
-    RootUidMarshaller rootUidMarshaller;
 
     void connectPool()
 	throw(IoError);
@@ -32,8 +29,8 @@ private:
 	throw(IoError);
 
 public:
-    BlobFsMarshaller(RootUidMarshaller rootUidMarshaller, string address)
-	throw();
+    BlobFsMarshaller(string address)
+	throw(IoError);
 
     ~BlobFsMarshaller()
 	throw();
@@ -56,18 +53,18 @@ public:
     size_t getFileSize(const FileHandle fHandle) const
 	throw(IoError);
 
-    void setFileStringAttr(const FileHandle fHandle, const string key,
-			   const string value) const
+    void setStringAttr(const FileHandle fHandle, const string key,
+		       const string value) const
 	throw(IoError);
 
-    string getFileStringAttr(const FileHandle fHandle, const string key) const
+    string getStringAttr(const FileHandle fHandle, const string key) const
 	throw(IoError);
 
-    void setFileLongAttr(const FileHandle fHandle, const string key,
-			 long value) const
+    void setLongAttr(const FileHandle fHandle, const string key,
+		     long value) const
 	throw(IoError);
 
-    long getFileLongAttr(const FileHandle fHandle, const string key) const
+    long getLongAttr(const FileHandle fHandle, const string key) const
 	throw(IoError);
 
     // Rootdir related methods
@@ -85,6 +82,19 @@ public:
 	throw(IoError);
 
     const Uid storeRootDir(const DirHandle dirHandle)
+	throw(IoError);
+
+    // Dir related methods
+
+    const Uid storeDir(const DirHandle dirHandle)
+	throw(IoError);
+
+    // Node conversion methods
+
+    FileHandle toFileHandle(const DirHandle dirHandle)
+	throw(IoError);
+
+    FileHandle addSubdir(const DirHandle dirHandle, const Uid uid)
 	throw(IoError);
 
 };

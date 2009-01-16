@@ -17,9 +17,8 @@ using namespace std;
 
 class ChildIterator;
 
+class RootDirMarshaller;
 class FileState;
-class FileHandle;
-class DirHandle;
 class Uid;
 
 class File;
@@ -56,10 +55,6 @@ class File : public Child {
 
 private:
     FsMarshaller& marshaller;
-    Parent& parent;
-    // TODO
-    const string name;
-//    NodeAttrImpl attr;
     FileState* state;
 
     static log4cpp::Category& cat;
@@ -75,13 +70,6 @@ public:
 	 const FileHandle fHandle) throw(IoError);
 
     FsMarshaller& getMarshaller() const throw();
-
-    Parent& getParent() const throw();
-
-    const string getName() const throw();
-
-    // TODO Remove?
-//    NodeAttr& getAttr() throw();
 
     ssize_t getSize() const throw();
 
@@ -107,10 +95,10 @@ public:
     virtual ChildIterator childIterator()
 	throw(IoError) = 0;
 
-    virtual void addFile(File& file)
+    virtual void addChild(Child& child)
 	throw(IoError) = 0;
 
-    virtual void removeFile(File& file)
+    virtual void removeChild(Child& child)
 	throw(IoError) = 0;
 
     virtual void setDirty()
@@ -124,25 +112,11 @@ public:
 
 };
 
-// TODO Remove
-// class Parent {
-
-// public:
-//     virtual void release()
-// 	throw(IoError) = 0;
-
-//     virtual void setDirty()
-// 	throw() = 0;
-
-//     virtual ~Parent()
-// 	throw() = 0;
-
-// };
-
 class RootDir : public Parent {
 
 private:
     FsMarshaller &marshaller;
+    const RootDirMarshaller &rootDirMarshaller;
     RootDirState *state;
     NodeAttrImpl attr;
 
@@ -157,10 +131,10 @@ private:
 public:
     // Ctors
 
-    RootDir(FsMarshaller& marshaller)
+    RootDir(FsMarshaller& marshaller, const RootDirMarshaller& rootDirMarshaller)
 	throw();
 
-    RootDir(FsMarshaller& marshaller, Uid uid)
+    RootDir(FsMarshaller& marshaller, const RootDirMarshaller& rootDirMarshaller, Uid uid)
 	throw(IoError);
 
     ~RootDir()
@@ -168,10 +142,19 @@ public:
 
     // Introspection
 
-    FsMarshaller& getMarshaller()
-	const throw();
+    FsMarshaller& getMarshaller() const
+	throw();
+
+    const RootDirMarshaller& getRootDirMarshaller() const
+	throw();
 
     NodeAttr& getAttr()
+	throw();
+
+    const NodeAttr& getAttr() const
+	throw();
+
+    const Node& getOwner() const
 	throw();
 
     const RootDirState& getState() const
@@ -185,10 +168,10 @@ public:
     ChildIterator childIterator()
 	throw(IoError);
 
-    void addFile(File& file)
+    void addChild(Child& child)
 	throw(IoError);
 
-    void removeFile(File& file)
+    void removeChild(Child& child)
 	throw(IoError);
 
     void setDirty()
@@ -218,7 +201,7 @@ public:
 
 //     void setUid(Uid uid);
 
-//     void addFile(File *file);
+//     void addChild(File *file);
 
 //     vector<File*>* getFiles();
 // };

@@ -1,0 +1,31 @@
+#include <cxxtest/TestSuite.h>
+
+#include "StringUtils.hh"
+
+class InvalidArgumentError;
+
+class StringUtilsTest : public CxxTest::TestSuite {
+
+public:
+    void testParseInt() {
+	TS_ASSERT_EQUALS(42, parse<int>("42"));
+    }
+
+    void testParseInvalidInt() {
+	TS_ASSERT_THROWS(parse<int>("foo"), InvalidArgumentError);
+    }
+
+    void testParseIntTrailingGarbage() {
+	TS_ASSERT_THROWS(parse<int>("42foo"), InvalidArgumentError);
+    }
+
+    void testErrorMessage() {
+	try {
+	    parse<int>("foo");
+	    TS_FAIL(NULL);
+	} catch (InvalidArgumentError e) {
+	    TS_ASSERT_EQUALS(0, strcmp("<foo> is not a valid i", e.what()));
+	}
+    }
+
+};

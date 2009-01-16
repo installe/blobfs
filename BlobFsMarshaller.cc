@@ -2,6 +2,10 @@
 #include "BlobFsMarshaller.hh"
 #include "file.hh"
 #include "filedata.hh"
+// TODO Remove when marshalling Children moves to ChildFactory.
+#include "ChildFactory.hh"
+#include "FileHandleConsts.hh"
+// TODO End
 #include "logutils.hh"
 #include "RootUidMarshaller.hh"
 
@@ -12,9 +16,12 @@
 log4cpp::Category& BlobFsMarshaller::cat =
     log4cpp::Category::getInstance("BlobFsMarshaller");
 
-BlobFsMarshaller::BlobFsMarshaller(RootUidMarshaller marshaller, string address)
-    throw()
-    : address(address), connected(false), rootUidMarshaller(marshaller) { }
+BlobFsMarshaller::BlobFsMarshaller(string address)
+    throw(IoError)
+    : address(address)
+{
+    connectPool();
+}
 
 BlobFsMarshaller::~BlobFsMarshaller()
     throw()
@@ -25,9 +32,6 @@ BlobFsMarshaller::~BlobFsMarshaller()
 void BlobFsMarshaller::connectPool()
     throw(IoError)
 {
-    if (connected)
-	return;
-
     cat.debug("Connecting to pool at address <%s>", address.c_str());
     pool = FPPool_Open(address.c_str());
 
@@ -35,20 +39,14 @@ void BlobFsMarshaller::connectPool()
     assert(pool != 0);
 
     cat.debug("Connected to pool at address <%s>", address.c_str());
-    connected = true;
 }
 
 void BlobFsMarshaller::disconnectPool()
     throw(IoError)
 {
-    if (!connected)
-	return;
-
     cat.debug("Disconnecting from pool.");
     FPPool_Close(pool);
-    connected = false;
 }
-
 
 void BlobFsMarshaller::checkForErrors(string action, ...) const
     throw(IoError)
@@ -92,16 +90,16 @@ FileHandle BlobFsMarshaller::storeFile(const DirHandle dirHandle,
 				       const FileWriter& data)
     throw(IoError)
 {
-    connectPool();
-
     cat.trace("writing file data.");
 
     const char *bytes = static_cast<const char *>(data.getData());
     size_t size = data.getSize();
     FPTagRef topTag = FPClip_GetTopTag(dirHandle.getClipRef());
-    FPTagRef fileTag = FPTag_Create(topTag, "file");
+    FPTagRef fileTag = FPTag_Create(topTag, NODE);
+
+    FPTag_SetLongAttribute(fileTag, TYPE, FILE_TYPE);
     // TODO NEW CODE
-    FPTag_SetLongAttribute(fileTag, "size", size);
+    FPTag_SetLongAttribute(fileTag, SIZE, size);
     // END NEW CODE
     FPStreamRef streamRef =
 	FPStream_CreateBufferForInput(const_cast<char *>(bytes), size);
@@ -149,16 +147,16 @@ size_t BlobFsMarshaller::getFileSize(const FileHandle fHandle) const
     return size;
 }
 
-void BlobFsMarshaller::setFileStringAttr(const FileHandle fHandle,
-					const string key, const string value)
+void BlobFsMarshaller::setStringAttr(const FileHandle fHandle,
+				     const string key, const string value)
     const
     throw(IoError)
 {
     FPTag_SetStringAttribute(fHandle.getTagRef(), key.c_str(), value.c_str());
 }
 
-string BlobFsMarshaller::getFileStringAttr(const FileHandle fHandle,
-					   const string key) const
+string BlobFsMarshaller::getStringAttr(const FileHandle fHandle,
+				       const string key) const
     throw(IoError)
 {
     const FPInt initialSize = 80;
@@ -177,15 +175,15 @@ string BlobFsMarshaller::getFileStringAttr(const FileHandle fHandle,
     return buf;
 }
 
-void BlobFsMarshaller::setFileLongAttr(const FileHandle fHandle,
-				       const string key, long value) const
+void BlobFsMarshaller::setLongAttr(const FileHandle fHandle,
+				   const string key, long value) const
     throw(IoError)
 {
     FPTag_SetLongAttribute(fHandle.getTagRef(), key.c_str(), value);
 }
 
-long BlobFsMarshaller::getFileLongAttr(const FileHandle fHandle,
-				       const string key) const
+long BlobFsMarshaller::getLongAttr(const FileHandle fHandle,
+				   const string key) const
     throw(IoError)
 {
     return FPTag_GetLongAttribute(fHandle.getTagRef(), key.c_str());
@@ -196,8 +194,6 @@ long BlobFsMarshaller::getFileLongAttr(const FileHandle fHandle,
 const DirHandle BlobFsMarshaller::openDirHandle(const Uid uid)
     throw(IoError)
 {
-    connectPool();
-
     const FPClipID& clipID = uid.getClipID();
     const FPClipRef clipRef = FPClip_Open(pool, clipID, FP_OPEN_ASTREE);
 
@@ -211,8 +207,6 @@ const DirHandle BlobFsMarshaller::openDirHandle(const Uid uid)
 const DirHandle BlobFsMarshaller::newDirHandle()
     throw(IoError)
 {
-    connectPool();
-
     FPClipRef clipRef = FPClip_Create(pool, "BlobFs clip");
 
     cat.debug("clipRef %lli - created", clipRef);
@@ -242,13 +236,43 @@ NodeHandleIterator BlobFsMarshaller::getHandleIterator(const DirHandle dirHandle
 const Uid BlobFsMarshaller::storeRootDir(const DirHandle dirHandle)
     throw(IoError)
 {
+    return storeDir(dirHandle);
+}
+
+// Dir related methods
+
+const Uid BlobFsMarshaller::storeDir(const DirHandle dirHandle)
+    throw(IoError)
+{
     FPClipID clipID;
 
     FPClip_Write(dirHandle.getClipRef(), clipID);
     cat.debug("clipRef %lli - wrote %s", dirHandle.getClipRef(), clipID);
 
-    Uid uid(clipID);
+    return Uid(clipID);
+}
 
-    rootUidMarshaller.storeRootUid(uid);
-    return uid;
+// Node conversion methods
+
+FileHandle BlobFsMarshaller::toFileHandle(const DirHandle dirHandle)
+    throw(IoError)
+{
+    FPTagRef topTag = FPClip_GetTopTag(dirHandle.getClipRef());
+
+    return FileHandle(topTag);
+}
+
+FileHandle BlobFsMarshaller::addSubdir(const DirHandle dirHandle, const Uid uid)
+    throw(IoError)
+{
+    FPTagRef newTopTag = FPClip_GetTopTag(dirHandle.getClipRef());
+    FPTagRef newTag = FPTag_Create(newTopTag, "node");
+
+    FPTag_SetLongAttribute(newTag, TYPE, DIR_TYPE);
+    FPTag_SetStringAttribute(newTag, CLIPID, uid.getClipID());
+    cat.debug("created tagRef %lli for subdir with clipid=<%s>",
+	      newTag, uid.getClipID());
+    checkForErrors("adding subdir");
+
+    return FileHandle(newTag);
 }
