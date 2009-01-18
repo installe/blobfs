@@ -183,7 +183,8 @@ int FileSystem::readDir(const string path, void *buf, fuse_fill_dir_t filler,
 	if (filler(buf, child->getName().c_str(), NULL, 0) != 0)
 	    throw IoError(ENOMEM, "insufficient memory");
     }
-    
+
+    parent.getAttr().setATime(clock.time());
     cat.debug("read directory <%s> with %i entries", path.c_str(), i);
     return 0;
 }
@@ -257,6 +258,7 @@ int FileSystem::create(const string path, mode_t mode, fuse_file_info *fi) const
     attr.setCTime(now);
     attr.setMTime(now);
     attr.setATime(now);
+    parent.getAttr().setMTime(now);
 
     fi->fh = (uint64_t) &file;
 
@@ -284,8 +286,6 @@ int FileSystem::open(const string path, fuse_file_info *fi) const
 	throw IoError(EINVAL, "Invalid access mode: %i", accessMode);
     }
 
-    file.getAttr().setATime(clock.time());
-
     // TODO Change solution to avoid casting - How?
     // TODO We should fill this in with a class that contains a reference to
     // a file + the access mode that was used for opening, so we can check
@@ -307,6 +307,7 @@ int FileSystem::unlink(const string path) const
 
     accessManager.checkModifiable(file, path, context);
     parent.removeChild(file);
+    parent.getAttr().setMTime(clock.time());
     parent.release();
 
     return 0;
@@ -344,6 +345,7 @@ int FileSystem::write(const string path, const void *buf, size_t size,
     accessManager.checkWritable(file, path, UserContext());
     file.getAttr().setATime(now);
     file.getAttr().setMTime(now);
+    file.getAttr().setCTime(now);
 
     return file.write(buf, offset, size);
 }
@@ -373,7 +375,7 @@ int FileSystem::chmod(const string path, mode_t mode) const
 
     accessManager.checkModifiable(node, path, context);
     nodeAttrHelper.setPerms(attr, mode);
-    attr.setCTime(time(NULL));
+    attr.setCTime(clock.time());
     attr.persist();
 
     return 0;
@@ -393,7 +395,7 @@ int FileSystem::chown(const string path, uid_t uid, gid_t gid) const
 
     if (uid != static_cast<unsigned>(-1)) attr.setUid(uid);
     if (gid != static_cast<unsigned>(-1)) attr.setGid(gid);
-    attr.setCTime(time(NULL));
+    attr.setCTime(clock.time());
     attr.persist();
 
     return 0;
@@ -452,6 +454,7 @@ int FileSystem::mkdir(const string path, mode_t mode) const
     time_t now = clock.time();
 
     parent.addChild(dir);
+    parent.getAttr().setMTime(now);
     attr.setUid(context.getUid());
     attr.setGid(context.getGid());
     nodeAttrHelper.setPerms(attr, mode);

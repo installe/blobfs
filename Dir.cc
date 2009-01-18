@@ -1,4 +1,4 @@
-#include "ChildFactory.hh"
+#include "NodeMarshaller.hh"
 #include "Dir.hh"
 #include "NodeAttrMarshaller.hh"
 #include "ParentAttrPersistStrategy.hh"

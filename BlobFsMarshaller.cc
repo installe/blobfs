@@ -3,8 +3,8 @@
 #include "file.hh"
 #include "filedata.hh"
 // TODO Remove when marshalling Children moves to ChildFactory.
-#include "ChildFactory.hh"
 #include "FileHandleConsts.hh"
+#include "NodeMarshaller.hh"
 // TODO End
 #include "logutils.hh"
 #include "RootUidMarshaller.hh"
