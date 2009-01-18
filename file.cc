@@ -634,7 +634,7 @@ ChildVector VirtualRootDirState::listChildren(DirHandle dirHandle) const
 
     while (it.hasNext()) {
 	FileHandle handle = it.next();
-	ChildFactory factory;
+	NodeMarshaller factory;
 	Child& child = factory.newChild(marshaller, rootDir, handle);
 
 	children->push_back(&child);

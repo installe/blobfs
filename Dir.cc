@@ -184,7 +184,7 @@ ChildVector VirtualDirState::listChildren(DirHandle dirHandle) const
     while (it.hasNext()) {
 	// TODO Rename FileHandle to ChildHandle
 	FileHandle handle = it.next();
-	ChildFactory factory;
+	NodeMarshaller factory;
 	Child& child = factory.newChild(marshaller, dir, handle);
 
 	children->push_back(&child);
@@ -401,7 +401,7 @@ FileHandle CachedDirState::addToDirHandle(DirHandle dirHandle)
     NodeAttrMarshaller attrMarshaller(marshaller);
     FileHandle newHandle = marshaller.addSubdir(dirHandle, uid);
 
-    // TODO Move logic below + ChildFactory to ChildMarshaller? Same for all
+    // TODO Move logic below to NodeMarshaller? Same for all
     // other DirStates, FileStates, RootDirStates.
     // TODO Include setting name in marshallDir()? Don't think so.
     marshaller.setStringAttr(newHandle, "name", dir.getName());

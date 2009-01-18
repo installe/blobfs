@@ -9,8 +9,8 @@
 
 using namespace std;
 
-Child& ChildFactory::newChild(FsMarshaller& marshaller, Parent& parent,
-			      FileHandle handle)
+Child& NodeMarshaller::newChild(FsMarshaller& marshaller, Parent& parent,
+				FileHandle handle)
     throw(InvalidArgumentError)
 {
     string name = marshaller.getStringAttr(handle, "name");

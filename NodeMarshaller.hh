@@ -29,10 +29,10 @@ public:
 
 };
 
-class ChildFactory {
+class NodeMarshaller {
 
 public:
-    // TODO Change FileHandle in signature to NodeHandle
+    // TODO Change FileHandle in signature to NodeHandle (or ChildHandle?)
     Child& newChild(FsMarshaller& marshaller, Parent& parent, FileHandle handle)
 	throw(InvalidArgumentError);
 

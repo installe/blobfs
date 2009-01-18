@@ -2,7 +2,7 @@
 #include "BlobFsMarshaller.hh"
 #include "file.hh"
 #include "filedata.hh"
-// TODO Remove when marshalling Children moves to ChildFactory.
+// TODO Remove when marshalling Children moves to NodeMarshaller.
 #include "FileHandleConsts.hh"
 #include "NodeMarshaller.hh"
 // TODO End
