@@ -1,0 +1,73 @@
+#include <cxxtest/TestSuite.h>
+
+#include <fault/Exception.hh>
+
+class TestException : public fault::Exception {
+
+public:
+    TestException(int errno)
+	: Exception("errno: %i", errno) { }
+
+    TestException(const Exception *reason, int errno) 
+	: Exception(reason, "errno: %i", errno)  { }
+
+    TestException(const std::exception *reason, int errno)
+	: Exception(reason, "errno: %i", errno) { }
+
+    const Exception *clone() const
+	throw()
+    {
+	return new TestException(*this);
+    }
+
+};
+
+class ExceptionTest : public CxxTest::TestSuite {
+
+public:
+    void testException() {
+	TestException exception(4);
+	std::ostringstream os;
+
+	os << exception.what();
+	TS_ASSERT(os.str().find("TestException: errno: 4\n#3 ")
+		  != std::string::npos);
+    }
+
+    void testStdException() {
+	std::runtime_error *nested =
+	    new std::runtime_error("runtime error 666");
+	TestException exception(nested, 42);
+	std::ostringstream os;
+
+	os << exception.what();
+	TS_ASSERT(os.str().find("TestException: errno: 42\n"
+				"<- WrapperException: runtime error 666")
+		  != std::string::npos);
+    }
+
+    void testNestedException() {
+	TestException *nested = new TestException(33);
+	TestException exception(nested, 42);
+	std::ostringstream os;
+
+	os << exception.what();
+	TS_ASSERT(os.str().find("TestException: errno: 42\n"
+				"<- TestException: errno: 33\n")
+		  != std::string::npos);
+    }
+
+    void testNestedNestedException() {
+	TestException *nested1 = new TestException(33);
+	TestException *nested2 = new TestException(nested1, 42);
+	TestException exception(nested2, 666);
+	std::ostringstream os;
+
+	os << exception.what();
+	TS_ASSERT(os.str().find("TestException: errno: 666\n"
+				"<- TestException: errno: 42\n"
+				"<-- TestException: errno: 33\n")
+		  != std::string::npos);
+    }
+
+};

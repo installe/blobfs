@@ -1,0 +1,49 @@
+#include <cxxtest/TestSuite.h>
+
+#include <fault/Stacktrace.hh>
+
+#include <sstream>
+#include <string>
+
+class StacktraceTest : public CxxTest::TestSuite {
+
+private:
+    fault::Stacktrace recurse(int i) {
+	if (--i > 0)
+	    return recurse(i);
+	else
+	    return fault::Stacktrace();
+    }
+
+    int countOccurrences(const std::string haystack, const char *needle) {
+	int n = -1;
+
+	for (size_t pos = 0; pos != std::string::npos; ++n)
+	    pos = haystack.find(needle, pos ? pos + 1 : pos);
+
+	return n;
+    }
+
+public:
+    void testStacktrace() {
+	std::ostringstream os;
+
+	os << recurse(5);
+	TS_ASSERT_EQUALS(5, countOccurrences(
+			     os.str(), "StacktraceTest::recurse(int)"));
+    }
+
+    void testBoundedStacktrace() {
+	std::ostringstream os1;
+	fault::Stacktrace trace1;
+	std::ostringstream os2;
+	fault::Stacktrace trace2(2);
+
+	os1 << trace1;
+	os2 << trace2;
+
+	TS_ASSERT_EQUALS(countOccurrences(os1.str(), "\n") - 2,
+			 countOccurrences(os2.str(), "\n"));
+    }
+
+};
