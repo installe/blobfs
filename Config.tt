@@ -2,6 +2,8 @@
 
 #include "Config.hh"
 
+#include <stdlib.h>
+
 #include <boost/filesystem.hpp>
 
 using boost::filesystem::create_directories;
@@ -12,8 +14,12 @@ private:
     fs::path tmpDir;
 
     void setUp() {
-	tmpDir = fs::path(fs::current_path() / "test");
-	fs::create_directories(tmpDir);
+	char name[] = "testXXXXXX";
+
+	if (! mkdtemp(name))
+	    throw IoError(errno, "Couldn't create temporary directory");
+
+	tmpDir = fs::path(fs::current_path() / name);
     }
 
     void tearDown() {
