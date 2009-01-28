@@ -27,7 +27,7 @@ public:
     bool hasNext()
 	throw();
 
-    Child* next()
+    Child& next()
 	throw();
     
 };

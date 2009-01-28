@@ -4,14 +4,37 @@
 #include "fsmarshaller.hh"
 #include "InvalidArgumentError.hh"
 #include "NodeAttrMarshaller.hh"
+#include "RootDirMarshaller.hh"
 
 #include <string>
 
 using namespace std;
 
-Child& NodeMarshaller::newChild(FsMarshaller& marshaller, Parent& parent,
-				FileHandle handle)
-    throw(InvalidArgumentError)
+class NodeType {
+
+private:
+    NodeTypeEnum type;
+
+public: 
+    NodeType(int type)
+	throw()
+	: type(static_cast<NodeTypeEnum>(type)) { }
+
+    operator int()
+	throw() { return type; }
+
+    int toInt()
+	throw() { return type; }
+
+};
+
+NodeMarshaller::NodeMarshaller(FsMarshaller& marshaller,
+			       RootDirMarshaller& rootDirMarshaller)
+    throw()
+    : marshaller(marshaller), rootDirMarshaller(rootDirMarshaller) { }
+
+Child& NodeMarshaller::unmarshal(Parent& parent, FileHandle handle) const
+    throw(IoError, InvalidArgumentError)
 {
     string name = marshaller.getStringAttr(handle, "name");
     NodeType type = marshaller.getLongAttr(handle, "type");
@@ -32,4 +55,19 @@ Child& NodeMarshaller::newChild(FsMarshaller& marshaller, Parent& parent,
     }
 
     return *child;
+}
+
+Uid NodeMarshaller::marshal(DirHandle dirHandle, RootDir& rootDir) const
+    throw(IoError)
+{
+    for (ChildIterator it = rootDir.childIterator(); it.hasNext(); /* */) {
+	Child& child = it.next();
+
+	child.addToDirHandle(dirHandle);
+    }
+
+    Uid uid = marshaller.storeRootDir(dirHandle);
+
+    rootDirMarshaller.marshal(rootDir, uid);
+    return uid;
 }

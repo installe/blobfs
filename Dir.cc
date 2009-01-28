@@ -2,6 +2,7 @@
 #include "Dir.hh"
 #include "NodeAttrMarshaller.hh"
 #include "ParentAttrPersistStrategy.hh"
+#include "RootDirMarshallerImpl.hh"
 
 #include <log4cpp/Category.hh>
 
@@ -180,12 +181,12 @@ ChildVector VirtualDirState::listChildren(DirHandle dirHandle) const
     FsMarshaller& marshaller = dir.getMarshaller();
     NodeHandleIterator it = marshaller.getHandleIterator(dirHandle);
     ChildVector children(new vector<Child *>);
+    NodeMarshaller nodeMarshaller(marshaller, *new RootDirMarshallerImpl("TODO"));
 
     while (it.hasNext()) {
 	// TODO Rename FileHandle to ChildHandle
 	FileHandle handle = it.next();
-	NodeMarshaller factory;
-	Child& child = factory.newChild(marshaller, dir, handle);
+	Child& child = nodeMarshaller.unmarshal(dir, handle);
 
 	children->push_back(&child);
     }

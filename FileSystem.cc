@@ -42,10 +42,10 @@ Child *FileSystem::findChild(Parent& parent, const string name) const
     throw()
 {
     for (ChildIterator it = parent.childIterator(); it.hasNext(); /* */) {
-	Child *child = it.next();
+	Child& child = it.next();
 
-	if (child->getName() == name)
-	    return child;
+	if (child.getName() == name)
+	    return &child;
     }
 
     return NULL;
@@ -177,10 +177,10 @@ int FileSystem::readDir(const string path, void *buf, fuse_fill_dir_t filler,
     cat.debug("got ChildIterator");
 
     for (ChildIterator it = parent.childIterator(); it.hasNext(); i++) {
-	Child *child = it.next();
+	Child& child = it.next();
 
-	cat.debug("found <%s/%s>", path.c_str(), child->getName().c_str());
-	if (filler(buf, child->getName().c_str(), NULL, 0) != 0)
+	cat.debug("found <%s/%s>", path.c_str(), child.getName().c_str());
+	if (filler(buf, child.getName().c_str(), NULL, 0) != 0)
 	    throw IoError(ENOMEM, "insufficient memory");
     }
 

@@ -10,9 +10,10 @@ LDFLAGS := -g3 -rdynamic $(LDFLAGS) -fPIC
 
 TST = $(wildcard *.tt)
 PKG = $(shell basename `pwd`)
-LIB = $(ROOT)/src/$(PKG)/lib$(PKG).a
+LIBDIR = $(ROOT)/src/$(PKG)
+LIB = $(LIBDIR)/lib$(PKG).a
 
-.PHONY: all clean dep build test
+.PHONY: all clean dep build test x
 
 all: test
 
@@ -28,3 +29,5 @@ runtests: runtests.cc $(LIB)
 runtests.cc: $(TST) $(LIB)
 	cxxtestgen.pl --error-printer --abort-on-fail --have-eh -o $@ $(TST)
 
+$(LIB): x
+	make -C $(LIBDIR) build

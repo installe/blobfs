@@ -18,6 +18,11 @@
 #include "NodeMarshaller.hh"
 #include "ParentAttrPersistStrategy.hh"
 #include "RootDirMarshaller.hh"
+// TODO Move Dir to separate file, construct with RootDirMarshaller interface
+// object, and don't supply FsMarshaller object any more. -> Change
+// RootDirMarshallerImpl.hh to RootDirMarshaller.hh
+#include "RootDirMarshallerImpl.hh"
+// END TODO
 #include "Uid.hh"
 
 using namespace std;
@@ -634,8 +639,8 @@ ChildVector VirtualRootDirState::listChildren(DirHandle dirHandle) const
 
     while (it.hasNext()) {
 	FileHandle handle = it.next();
-	NodeMarshaller factory;
-	Child& child = factory.newChild(marshaller, rootDir, handle);
+	NodeMarshaller nodeMarshaller(marshaller, *new RootDirMarshallerImpl("TODO"));
+	Child& child = nodeMarshaller.unmarshal(rootDir, handle);
 
 	children->push_back(&child);
     }
@@ -754,6 +759,8 @@ void NewRootDirState::release()
 {
     FsMarshaller& marshaller = rootDir.getMarshaller();
     DirHandle newDirHandle = marshaller.newDirHandle();
+    // TODO Uncomment
+//     Uid uid = nodeMarshaller.marshal(newDirHandle, rootDir);
 
     // TODO: Seems like we only need to iterate over children in RootDir/Dir,
     // so remove childIterator() from the (public) interface.

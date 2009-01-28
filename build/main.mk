@@ -16,7 +16,7 @@ TSTDIR = $(ROOT)/test/$(PKG)
 
 .PHONY: all clean dep build
 
-all: build test
+all: test
 
 clean:
 	rm -f *.o $(LIB)
@@ -25,7 +25,7 @@ dep: .depend
 
 build: $(LIB)
 
-test:
+test: build
 	make -C $(TSTDIR)
 
 $(LIB): $(OBJ)

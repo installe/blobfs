@@ -16,8 +16,8 @@ bool ChildIterator::hasNext()
     return it != end;
 }
 
-Child* ChildIterator::next()
+Child& ChildIterator::next()
     throw()
 {
-    return *it++;
+    return **it++;
 }
